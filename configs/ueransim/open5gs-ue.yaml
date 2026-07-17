@@ -1,0 +1,88 @@
+# UERANSIM UE Configuration for Open5GS
+# Open Telecom Lab — v1.0
+# Reference: 3GPP TS 24.501, TS 33.501
+
+# ─── Subscriber Identity ───────────────────────────────────────
+supi: 'imsi-001010000000001'
+
+# Home PLMN
+mcc: '001'
+mnc: '01'
+
+# SUCI Protection (0 = Null scheme — no encryption of SUPI)
+protectionScheme: 0
+homeNetworkPublicKey: '5a8d38864820197c3394b92613b20b91633cbd897119273bf8e4a6f4eec0a650'
+homeNetworkPublicKeyId: 1
+routingIndicator: '0000'
+
+# ─── Authentication Credentials ────────────────────────────────
+# Permanent subscription key (K) — must match MongoDB subscriber
+key: '465B5CE8B199B49FAA5F0A2EE238A6BC'
+
+# Operator Code (OPc) — derived from OP and K
+op: 'E8ED2441347B7990E92C19B0316CD6FC'
+opType: 'OPC'
+
+# Authentication Management Field
+amf: '8000'
+
+# ─── Device Identity ───────────────────────────────────────────
+imei: '356938035643803'
+imeiSv: '4370816125816151'
+
+# ─── Network Interface ─────────────────────────────────────────
+tunNetmask: '255.255.0.0'
+
+# Use Linux network namespace for UE traffic isolation
+useNamespace: true
+nsNamePrefix: 'ueransim'
+
+# ─── RAN Connection ────────────────────────────────────────────
+gnbSearchList:
+  - 127.0.0.1
+
+# ─── UAC Configuration ─────────────────────────────────────────
+uacAic:
+  mps: false
+  mcs: false
+
+uacAcc:
+  normalClass: 0
+  class11: false
+  class12: false
+  class13: false
+  class14: false
+  class15: false
+
+# ─── PDU Session ────────────────────────────────────────────────
+sessions:
+  - type: 'IPv4'
+    apn: 'internet'
+    slice:
+      sst: 1
+      sd: 16777215        # 0xFFFFFF in decimal
+
+# ─── Network Slicing ───────────────────────────────────────────
+configured-nssai:
+  - sst: 1
+    sd: 16777215
+
+default-nssai:
+  - sst: 1
+    sd: 16777215
+
+# ─── Security Algorithms ───────────────────────────────────────
+integrity:
+  IA1: true    # SNOW 3G
+  IA2: true    # AES
+  IA3: true    # ZUC
+
+ciphering:
+  EA1: true    # SNOW 3G
+  EA2: true    # AES
+  EA3: true    # ZUC
+
+# ─── Data Rate ──────────────────────────────────────────────────
+integrityMaxRate:
+  uplink: 'full'
+  downlink: 'full'

@@ -1,0 +1,30 @@
+# UERANSIM gNodeB Configuration for Open5GS
+# Open Telecom Lab — v1.0
+# Reference: UERANSIM Wiki + 3GPP TS 38.413
+
+# PLMN Identity (Test Network)
+mcc: '001'
+mnc: '01'
+
+# NR Cell Identity
+nci: '0x000000010'
+idLength: 32
+tac: 1
+
+# Transport Layer Addresses
+linkIp: 127.0.0.1     # gNB local bind
+ngapIp: 127.0.0.1     # N2 interface (SCTP → AMF)
+gtpIp: 127.0.0.1      # N3 interface (GTP-U → UPF)
+
+# AMF Configuration
+amfConfigs:
+  - address: 127.0.0.1
+    port: 38412          # SCTP port for NGAP
+
+# Network Slice Support
+slices:
+  - sst: 1              # eMBB (Enhanced Mobile Broadband)
+    sd: 0xffffff         # Default Slice Differentiator
+
+# Stream handling
+ignoreStreamIds: true

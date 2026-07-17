@@ -1,0 +1,44 @@
+# ─── Build artifacts ────────────────────────────────────────────
+build/
+cmake-build-*/
+*.o
+*.so
+*.a
+
+# ─── OS / Editor ────────────────────────────────────────────────
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── Logs ───────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Large PCAP files (store as GitHub Releases) ────────────────
+*.pcap
+*.pcapng
+!assets/captures/.gitkeep
+
+# ─── Secrets (never commit real credentials) ────────────────────
+*.pem
+*.key
+*.crt
+.env
+.env.*
+
+# ─── Node / Python artifacts ───────────────────────────────────
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+
+# ─── Docker (future) ───────────────────────────────────────────
+.docker/
+
+# ─── Terraform / Cloud (future) ────────────────────────────────
+*.tfstate
+*.tfstate.backup
+.terraform/
