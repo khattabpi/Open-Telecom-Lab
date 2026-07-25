@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.0.0-blue?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-v2.0.0-blue?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/3GPP-Release_17-orange?style=flat-square" alt="3GPP Release">
   <img src="https://img.shields.io/badge/Open5GS-v2.8.0-brightgreen?style=flat-square" alt="Open5GS">
   <img src="https://img.shields.io/badge/UERANSIM-v3.3.0-brightgreen?style=flat-square" alt="UERANSIM">
@@ -30,7 +30,7 @@
 
 ## 📖 Overview
 
-**Open Telecom Lab** is a comprehensive, real-world 5G Standalone (SA) network laboratory built on Ubuntu 24.04 LTS using open-source network functions. This project documents a complete engineering journey — from deploying a functional 5G Core Network to analyzing protocol-level packet flows.
+**Open Telecom Lab** is a comprehensive, real-world 5G Standalone (SA) network laboratory built on Ubuntu 24.04 LTS using open-source network functions. This project documents a complete engineering journey — from deploying a functional 5G Core Network to analyzing protocol-level packet flows, and now extending into IMS bearer infrastructure.
 
 This is **not a tutorial**. It is a living, evolving telecom engineering portfolio that grows as new technologies are integrated, tested, and documented.
 
@@ -40,16 +40,17 @@ This is **not a tutorial**. It is a living, evolving telecom engineering portfol
 |--------|-------------|-------------------|
 | **Deployment** | Native Ubuntu (production-like) | Docker copy-paste |
 | **Documentation** | Protocol-level analysis | Surface-level setup |
-| **Scope** | Full 5G SA end-to-end | Single component |
+| **Scope** | Full 5G SA + Dual-Slice + IMS Bearer | Single component |
 | **Evolution** | Versioned roadmap (v1–v8) | One-shot guide |
 | **Analysis** | Wireshark + tcpdump captures | No verification |
 
 ---
 
-## ✅ Current Features (v1.0)
+## ✅ Current Features (v2.0)
 
 > **Status: Implemented and Verified**
 
+### v1.0 — 5G SA Foundation
 - [x] **5G SA Core Network** — Full Open5GS deployment (AMF, SMF, UPF, NRF, AUSF, UDM, UDR, PCF, NSSF, BSF, SCP)
 - [x] **RAN Simulation** — UERANSIM gNodeB + UE with NR-SA support
 - [x] **UE Registration** — Complete Initial Registration procedure with PLMN selection
@@ -61,11 +62,21 @@ This is **not a tutorial**. It is a living, evolving telecom engineering portfol
 - [x] **Protocol Captures** — tcpdump/Wireshark PCAP analysis (NGAP, NAS, PFCP, GTP-U)
 - [x] **Network Namespace Isolation** — UE traffic isolation via Linux namespaces
 
+### v2.0 — IMS Bearer & Dual-Slice Infrastructure
+- [x] **Dual PDU Sessions** — Simultaneous `internet` (PSI[1]) and `ims` (PSI[2]) sessions on the same UE
+- [x] **IMS UPF Interface** — Secondary TUN interface (`ogstun2`) on `10.46.0.0/16` for IMS slice traffic
+- [x] **Dual-DNN SMF/UPF Config** — `pdu_session` and `subnet` entries extended for DNN `ims` in `smf.yaml` and `upf.yaml`
+- [x] **Policy Routing Fix** — High-priority `ip rule` entries (`priority 100`) injected to route decapsulated GTP-U packets to the main table, eliminating routing loops through `uesimtun` interfaces
+- [x] **Dual-Subnet NAT** — `iptables MASQUERADE` configured for both `10.45.0.0/16` and `10.46.0.0/16` over the WAN interface (`wlp58s0`)
+- [x] **Kernel rp_filter Disabled** — Reverse path filtering turned off on TUN interfaces to allow asymmetric user-plane flows
+- [x] **PLMN Synchronization** — `mcc: '001'` / `mnc: '01'` aligned between `open5gs-gnb.yaml`, UE config, and AMF subscriber DB
+- [x] **Persistent iptables Rules** — All NAT and FORWARD rules saved via `netfilter-persistent`
+
 ---
 
 ## 🏗️ Architecture
 
-### 5G Standalone Network Architecture
+### 5G Standalone Network Architecture (v2.0 — Dual Slice)
 
 ```mermaid
 graph TB
@@ -94,7 +105,7 @@ graph TB
         end
 
         subgraph UP ["User Plane"]
-            UPF[UPF<br/>127.0.0.7<br/>Subnet: 10.45.0.0/16]
+            UPF[UPF<br/>127.0.0.7<br/>internet: 10.45.0.0/16<br/>ims: 10.46.0.0/16]
         end
 
         subgraph DB ["Data Layer"]
@@ -102,13 +113,15 @@ graph TB
         end
     end
 
-    subgraph DN ["🌐 Data Network"]
-        INTERNET[Internet<br/>via NAT]
+    subgraph DN ["🌐 Data Networks"]
+        INTERNET[Internet<br/>via NAT — ogstun]
+        IMSNET[IMS Bearer<br/>via NAT — ogstun2]
     end
 
     UE1 -->|"NR-Uu (Simulated)"| GNB
     GNB -->|"NGAP / N2<br/>SCTP :38412"| AMF
-    GNB -->|"GTP-U / N3"| UPF
+    GNB -->|"GTP-U / N3<br/>PSI[1] internet"| UPF
+    GNB -->|"GTP-U / N3<br/>PSI[2] ims"| UPF
     AMF --> SCP
     SCP --> NRF
     SCP --> AUSF
@@ -117,7 +130,8 @@ graph TB
     UDM --> UDR
     UDR --> MONGO
     SMF -->|"PFCP / N4"| UPF
-    UPF -->|"N6"| INTERNET
+    UPF -->|"N6 — ogstun"| INTERNET
+    UPF -->|"N6 — ogstun2"| IMSNET
 
     classDef ue fill:#4FC3F7,stroke:#0288D1,color:#000
     classDef ran fill:#81C784,stroke:#388E3C,color:#000
@@ -131,10 +145,10 @@ graph TB
     class AMF,SMF,NRF,AUSF,UDM,UDR,PCF,NSSF,BSF,SCP cp
     class UPF up
     class MONGO db
-    class INTERNET dn
+    class INTERNET,IMSNET dn
 ```
 
-### UE Registration & PDU Session Flow
+### UE Registration & Dual PDU Session Flow
 
 ```mermaid
 sequenceDiagram
@@ -174,16 +188,23 @@ sequenceDiagram
     AMF->>UE: Registration Accept (5G-GUTI)
     UE-->>AMF: Registration Complete
 
-    Note over UE,UPF: Phase 5 — PDU Session Establishment
+    Note over UE,UPF: Phase 5 — PDU Session PSI[1] — DNN: internet
 
     UE->>AMF: PDU Session Establishment Request (SST:1, DNN:internet)
     AMF->>SMF: Nsmf_PDUSession_CreateSMContext
-    SMF->>UPF: PFCP Session Establishment Request
-    UPF-->>SMF: PFCP Session Establishment Response
-    SMF-->>AMF: PDU Session Resource Setup
+    SMF->>UPF: PFCP Session Establishment (ogstun / 10.45.0.0/16)
+    UPF-->>SMF: PFCP Session Response
     AMF->>UE: PDU Session Establishment Accept (IP: 10.45.0.x)
 
-    Note over UE,UPF: ✅ UE Connected — TUN interface up
+    Note over UE,UPF: Phase 6 — PDU Session PSI[2] — DNN: ims
+
+    UE->>AMF: PDU Session Establishment Request (SST:1, DNN:ims)
+    AMF->>SMF: Nsmf_PDUSession_CreateSMContext
+    SMF->>UPF: PFCP Session Establishment (ogstun2 / 10.46.0.0/16)
+    UPF-->>SMF: PFCP Session Response
+    AMF->>UE: PDU Session Establishment Accept (IP: 10.46.0.x)
+
+    Note over UE,UPF: ✅ UE Connected — uesimtun0 (internet) + uesimtun1 (ims)
 ```
 
 ---
@@ -198,6 +219,7 @@ sequenceDiagram
 | **Database** | MongoDB | 8.0.26 | Subscriber data store |
 | **Packet Capture** | tcpdump / Wireshark | Latest | Protocol analysis |
 | **Networking** | Linux Namespaces + iptables | Native | Traffic isolation & NAT |
+| **Firewall Persistence** | netfilter-persistent | Latest | Persistent iptables rules across reboots |
 
 ---
 
@@ -241,7 +263,8 @@ Open-Telecom-Lab/
 │   ├── lab-01-5g-sa-setup/    # Core network deployment
 │   ├── lab-02-ue-registration/# Registration procedure
 │   ├── lab-03-pdu-session/    # PDU session establishment
-│   └── lab-04-user-plane/     # End-to-end data path
+│   ├── lab-04-user-plane/     # End-to-end data path
+│   └── lab-05-ims-bearer/     # Dual-slice IMS bearer setup (v2.0)
 ├── scripts/                   # Automation & helper scripts
 ├── CHANGELOG.md
 ├── CODE_OF_CONDUCT.md
@@ -269,53 +292,65 @@ Open-Telecom-Lab/
 ### 1. Install Open5GS
 
 ```bash
-# Add Open5GS repository
 sudo add-apt-repository ppa:open5gs/latest
 sudo apt update
-
-# Install Open5GS
 sudo apt install -y open5gs
 ```
 
 ### 2. Install MongoDB
 
 ```bash
-# Import MongoDB GPG key and add repository
 # See: https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/
 sudo apt install -y mongodb-org
-
-# Start and enable MongoDB
-sudo systemctl start mongod
-sudo systemctl enable mongod
+sudo systemctl enable --now mongod
 ```
 
 ### 3. Build UERANSIM
 
 ```bash
-# Install dependencies
 sudo apt install -y make gcc g++ libsctp-dev lksctp-tools iproute2
-
-# Clone and build
 git clone https://github.com/aligungr/UERANSIM
-cd UERANSIM
-make
+cd UERANSIM && make
 ```
 
 ### 4. Configure the Network
 
 ```bash
-# Add subscriber to Open5GS
-# Use the Open5GS WebUI (http://localhost:9999) or open5gs-dbctl
+# Add subscriber via Open5GS WebUI (http://localhost:9999)
+# Add both DNNs: internet and ims
 
-# Configure NAT for UE internet access
+# Enable IP forwarding
 sudo sysctl -w net.ipv4.ip_forward=1
-sudo iptables -t nat -A POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
+
+# Disable rp_filter on TUN interfaces (required for asymmetric UPF flows)
+sudo sysctl -w net.ipv4.conf.ogstun.rp_filter=0
+sudo sysctl -w net.ipv4.conf.ogstun2.rp_filter=0
+
+# Policy routing — force GTP-U decapsulated packets to main table
+sudo ip rule add from 10.45.0.0/16 lookup main priority 100
+sudo ip rule add from 10.46.0.0/16 lookup main priority 100
+
+# NAT for both slices (replace wlp58s0 with your WAN interface)
+WAN=$(ip route show default | awk '{print $5}')
+sudo iptables -t nat -A POSTROUTING -s 10.45.0.0/16 -o $WAN -j MASQUERADE
+sudo iptables -t nat -A POSTROUTING -s 10.46.0.0/16 -o $WAN -j MASQUERADE
+
+# Allow FORWARD for both TUN interfaces
+sudo iptables -I FORWARD -i ogstun -j ACCEPT
+sudo iptables -I FORWARD -o ogstun -m state --state RELATED,ESTABLISHED -j ACCEPT
+sudo iptables -I FORWARD -i ogstun2 -j ACCEPT
+sudo iptables -I FORWARD -o ogstun2 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# Persist rules
+sudo apt install -y iptables-persistent
+sudo netfilter-persistent save
 ```
 
 ### 5. Start the Lab
 
 ```bash
 # Terminal 1 — Start gNodeB
+cd UERANSIM
 sudo ./build/nr-gnb -c config/open5gs-gnb.yaml
 
 # Terminal 2 — Start UE
@@ -325,17 +360,19 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ### 6. Verify Connectivity
 
 ```bash
-# Check UE registration
-# Expected: "Initial Registration is successful"
-# Expected: "PDU Session establishment is successful PSI[1]"
+# Expected log output:
+# "Initial Registration is successful"
+# "PDU Session establishment is successful PSI[1]"  ← internet
+# "PDU Session establishment is successful PSI[2]"  ← ims
 
-# Test internet access through UE
-sudo ip netns exec ueransim-001010000000001-internet-psi1 \
-  ping -c 4 8.8.8.8
+# Test internet slice
+sudo ip netns exec ueransim-001010000000001-internet-psi1 ping -c 4 8.8.8.8
 
-# Test DNS resolution
-sudo ip netns exec ueransim-001010000000001-internet-psi1 \
-  curl -I https://www.google.com
+# Test IMS bearer slice
+sudo ip netns exec ueransim-001010000000001-ims-psi2 ping -c 4 10.46.0.1
+
+# Test DNS
+sudo ip netns exec ueransim-001010000000001-internet-psi1 curl -I https://www.google.com
 ```
 
 ---
@@ -344,16 +381,16 @@ sudo ip netns exec ueransim-001010000000001-internet-psi1 \
 
 ### Network Parameters
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| **PLMN** | 001/01 | Test PLMN (MCC/MNC) |
-| **TAC** | 1 | Tracking Area Code |
-| **SST** | 1 | Slice/Service Type (eMBB) |
-| **SD** | 0xFFFFFF | Slice Differentiator |
-| **DNN** | internet | Data Network Name |
-| **UE Subnet** | 10.45.0.0/16 | PDU session IP pool |
-| **UE Gateway** | 10.45.0.1 | UPF gateway address |
-| **DNS** | 8.8.8.8 / 8.8.4.4 | Google Public DNS |
+| Parameter | internet Slice | ims Slice | Description |
+|-----------|---------------|-----------|-------------|
+| **PLMN** | 001/01 | 001/01 | Test PLMN (MCC/MNC) |
+| **TAC** | 1 | 1 | Tracking Area Code |
+| **SST** | 1 | 1 | Slice/Service Type (eMBB) |
+| **SD** | 0xFFFFFF | 0xFFFFFF | Slice Differentiator |
+| **DNN** | internet | ims | Data Network Name |
+| **UE Subnet** | 10.45.0.0/16 | 10.46.0.0/16 | PDU session IP pool |
+| **UE Gateway** | 10.45.0.1 (ogstun) | 10.46.0.1 (ogstun2) | UPF gateway address |
+| **PDU Session** | PSI[1] / uesimtun0 | PSI[2] / uesimtun1 | UE TUN interface |
 
 ### Core Network Addresses
 
@@ -373,6 +410,7 @@ sudo ip netns exec ueransim-001010000000001-internet-psi1 \
 | **OPc** | `E8ED2441347B7990E92C19B0316CD6FC` |
 | **AMF** | `8000` |
 | **IMEI** | 356938035643803 |
+| **DNNs** | internet, ims |
 
 ### Security Algorithms
 
@@ -391,7 +429,8 @@ graph LR
         direction TB
 
         subgraph NS_UE ["Network Namespace: ueransim-*"]
-            TUN[uesimtun0<br/>10.45.0.x/16]
+            TUN0[uesimtun0<br/>10.45.0.x/16<br/>DNN: internet]
+            TUN1[uesimtun1<br/>10.46.0.x/16<br/>DNN: ims]
         end
 
         subgraph CORE_NET ["Loopback Network Stack"]
@@ -400,33 +439,39 @@ graph LR
             UPF_N4["UPF N4<br/>127.0.0.7"]
             SMF_N4["SMF N4<br/>127.0.0.4"]
             OGSTUN["ogstun<br/>10.45.0.1/16"]
+            OGSTUN2["ogstun2<br/>10.46.0.1/16"]
         end
 
-        IPTABLES["iptables NAT<br/>MASQUERADE"]
+        IPTABLES["iptables NAT<br/>MASQUERADE (wlp58s0)<br/>+ FORWARD ACCEPT"]
+        IPRULE["ip rule priority 100<br/>→ main table"]
     end
 
     INTERNET["🌐 Internet"]
 
-    TUN -.->|"GTP-U Encap"| UPF_N3
-    AMF_N -->|"SCTP"| AMF_N
+    TUN0 -.->|"GTP-U PSI[1]"| UPF_N3
+    TUN1 -.->|"GTP-U PSI[2]"| UPF_N3
     SMF_N4 -->|"PFCP"| UPF_N4
-    OGSTUN --> IPTABLES
+    OGSTUN --> IPRULE
+    OGSTUN2 --> IPRULE
+    IPRULE --> IPTABLES
     IPTABLES --> INTERNET
 
     classDef ns fill:#E3F2FD,stroke:#1565C0
     classDef core fill:#F3E5F5,stroke:#6A1B9A
     classDef ext fill:#FFF3E0,stroke:#E65100
+    classDef fix fill:#E8F5E9,stroke:#2E7D32
 
-    class TUN ns
-    class AMF_N,UPF_N3,UPF_N4,SMF_N4,OGSTUN core
+    class TUN0,TUN1 ns
+    class AMF_N,UPF_N3,UPF_N4,SMF_N4,OGSTUN,OGSTUN2 core
     class INTERNET ext
+    class IPRULE fix
 ```
 
 ---
 
 ## 🔍 Packet Flow Analysis
 
-### Registration & Session Establishment — Protocol Stack
+### Registration & Dual PDU Session — Protocol Stack
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -442,12 +487,14 @@ graph LR
 │  6   │  NAS → Security Mode Complete                            │
 │  7   │  NGAP → Initial Context Setup (Registration Accept)      │
 │  8   │  NAS → Registration Complete                             │
-│  9   │  NAS → PDU Session Establishment Request (SST:1)         │
-│  10  │  PFCP → Session Establishment Request (SMF→UPF)          │
-│  11  │  PFCP → Session Establishment Response (UPF→SMF)         │
-│  12  │  NGAP → PDU Session Resource Setup                       │
-│  13  │  NAS → PDU Session Establishment Accept (10.45.0.x)      │
-│  14  │  GTP-U → User plane data via uesimtun0                   │
+│  9   │  NAS → PDU Session Establishment Request (DNN:internet)  │
+│  10  │  PFCP → Session Establishment (SMF→UPF, ogstun)         │
+│  11  │  NAS → PDU Session Establishment Accept (10.45.0.x)      │
+│  12  │  GTP-U → Data via uesimtun0 ✅                           │
+│  13  │  NAS → PDU Session Establishment Request (DNN:ims)       │
+│  14  │  PFCP → Session Establishment (SMF→UPF, ogstun2)        │
+│  15  │  NAS → PDU Session Establishment Accept (10.46.0.x)      │
+│  16  │  GTP-U → IMS bearer via uesimtun1 ✅                     │
 └──────┴──────────────────────────────────────────────────────────┘
 ```
 
@@ -462,6 +509,9 @@ sudo tcpdump -i lo -w pfcp.pcap udp port 8805
 
 # Capture GTP-U (N3 interface)
 sudo tcpdump -i lo -w gtpu.pcap udp port 2152
+
+# Capture IMS bearer traffic on ogstun2
+sudo tcpdump -i ogstun2 -n -w ims_bearer.pcap
 
 # Capture all 5G traffic
 sudo tcpdump -i lo -w 5g_all.pcap \
@@ -493,18 +543,63 @@ sudo tcpdump -i lo -w 5g_all.pcap \
 1. Verify UPF is running: `sudo systemctl status open5gs-upfd`
 2. Check PFCP addresses match: SMF client → `127.0.0.7`, UPF server → `127.0.0.7`
 3. Verify `sd: ffffff` in `smf.yaml` matches the UE slice config
+4. Confirm the DNN (`internet` or `ims`) exists in both `smf.yaml` `pdu_session` and subscriber DB
 
 </details>
 
 <details>
-<summary><strong>UE has IP but no internet access</strong></summary>
+<summary><strong>UE has IP but no internet access — 100% packet loss</strong></summary>
 
-**Cause:** Missing NAT rules or IP forwarding disabled.
+**Cause 1 — Docker FORWARD DROP policy:**
+Docker sets the kernel FORWARD chain policy to `DROP`, blocking UPF traffic before it reaches the NAT rule. Check with:
+```bash
+sudo nft list ruleset | grep "policy drop"
+```
 
 **Fix:**
 ```bash
+sudo iptables -I FORWARD -i ogstun -j ACCEPT
+sudo iptables -I FORWARD -o ogstun -m state --state RELATED,ESTABLISHED -j ACCEPT
+sudo netfilter-persistent save
+```
+
+**Cause 2 — NAT rule targeting wrong interface:**
+The MASQUERADE rule must target the actual WAN interface, not `ogstun`.
+```bash
+# Find your WAN interface
+ip route show default | awk '{print $5}'
+
+# Apply correct rule
+sudo iptables -t nat -A POSTROUTING -s 10.45.0.0/16 -o <WAN_IFACE> -j MASQUERADE
+```
+
+**Cause 3 — IP forwarding disabled:**
+```bash
 sudo sysctl -w net.ipv4.ip_forward=1
-sudo iptables -t nat -A POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
+```
+
+</details>
+
+<details>
+<summary><strong>IMS PDU session established but packets dropped by kernel</strong></summary>
+
+**Cause 1 — Policy routing loop:**
+Decapsulated GTP-U packets from UPF match UERANSIM's policy routing rules and get re-injected into `uesimtun` interfaces, creating a loop.
+
+**Fix:** Add high-priority rules to force packets to the main table:
+```bash
+sudo ip rule add from 10.45.0.0/16 lookup main priority 100
+sudo ip rule add from 10.46.0.0/16 lookup main priority 100
+```
+
+**Cause 2 — rp_filter dropping asymmetric packets:**
+The kernel drops packets arriving on `ogstun2` because the reverse path check fails for asymmetric UPF flows.
+
+**Fix:**
+```bash
+sudo sysctl -w net.ipv4.conf.ogstun.rp_filter=0
+sudo sysctl -w net.ipv4.conf.ogstun2.rp_filter=0
+sudo sysctl -w net.ipv4.conf.all.rp_filter=0
 ```
 
 </details>
@@ -533,8 +628,8 @@ gantt
     Protocol Documentation          :active,  v1b, 2026-Q3, 2026-Q4
 
     section v2.x — IMS & Voice
-    IMS / SIP / VoLTE               :         v2a, 2026-Q4, 2027-Q1
-    RTP & Call Flow Analysis        :         v2b, 2027-Q1, 2027-Q2
+    IMS Bearer & Dual-Slice         :done,    v2a, 2026-Q3, 2026-Q4
+    SIP / VoLTE / RTP Call Flow     :active,  v2b, 2026-Q4, 2027-Q2
 
     section v3.x — LTE Comparison
     EPC vs 5GC Architecture         :         v3a, 2027-Q2, 2027-Q3
@@ -562,7 +657,8 @@ gantt
 |---------|-------|--------|
 | **v1.0** | 5G SA Core + UE + PDU Session + Internet | ✅ **Implemented** |
 | **v1.x** | Protocol walkthroughs (NAS, NGAP, PFCP, GTP-U) | 🔄 In Progress |
-| **v2.x** | IMS / SIP / VoLTE / RTP | 📋 Planned |
+| **v2.0** | IMS Bearer + Dual-Slice + Kernel Routing Fixes | ✅ **Implemented** |
+| **v2.x** | SIP Registration + VoLTE Call Flow + RTP Analysis | 🔄 In Progress |
 | **v3.x** | LTE EPC comparison, Mobility, Handover | 📋 Planned |
 | **v4.x** | Docker deployment | 📋 Planned |
 | **v5.x** | Kubernetes deployment | 📋 Planned |
@@ -584,7 +680,7 @@ In-depth technical analysis for 5G Core engineers:
 | [Understanding AMF](docs/engineering-notes/understanding-amf.md) | AMF responsibilities, N1/N2/SBI interfaces, authentication coordination |
 | [5G Registration Analysis](docs/engineering-notes/5g-registration-analysis.md) | 8-step registration procedure, protocol mapping, Wireshark filters |
 | [Debugging PDU Session](docs/engineering-notes/debugging-pdu-session.md) | DNN/S-NSSAI mismatch, PFCP failures, NAT troubleshooting |
-| [Linux Networking Behind 5G](docs/engineering-notes/linux-networking-behind-5g.md) | Namespaces, TUN devices, GTP-U tunnels, iptables NAT |
+| [Linux Networking Behind 5G](docs/engineering-notes/linux-networking-behind-5g.md) | Namespaces, TUN devices, GTP-U tunnels, iptables NAT, rp_filter, policy routing |
 
 > See [docs/README.md](docs/README.md) for the full documentation index.
 
@@ -592,16 +688,17 @@ In-depth technical analysis for 5G Core engineers:
 
 ## 📚 Learning Outcomes
 
-After completing the v1.0 lab, you will understand:
+After completing the v1.0 + v2.0 labs, you will understand:
 
 - **3GPP 5G SA Architecture** — How NFs interact via SBI and reference points
 - **NAS Protocol** — Registration, authentication, and session management procedures
 - **NGAP** — N2 signaling between gNodeB and AMF over SCTP
 - **PFCP** — N4 session management between SMF and UPF
-- **GTP-U** — N3 user plane tunneling
-- **Network Slicing** — S-NSSAI configuration (SST/SD)
-- **Subscriber Provisioning** — MongoDB-based credential management
-- **Linux Networking** — Namespaces, TUN interfaces, iptables NAT
+- **GTP-U** — N3 user plane tunneling across dual PDU sessions
+- **Network Slicing** — S-NSSAI configuration (SST/SD) and multi-DNN subscriber provisioning
+- **IMS Bearer** — How a dedicated `ims` PDU session separates voice-plane traffic from data
+- **Linux Networking** — Namespaces, TUN interfaces, iptables NAT, policy routing (`ip rule`), rp_filter, nftables/iptables-nft coexistence
+- **Subscriber Provisioning** — MongoDB-based credential management with multi-DNN support
 
 ---
 
@@ -614,6 +711,8 @@ After completing the v1.0 lab, you will understand:
 | **3GPP TS 24.501** | [NAS Protocol for 5G](https://www.3gpp.org/dynareport/24501.htm) |
 | **3GPP TS 38.413** | [NGAP Specification](https://www.3gpp.org/dynareport/38413.htm) |
 | **3GPP TS 29.244** | [PFCP Specification](https://www.3gpp.org/dynareport/29244.htm) |
+| **3GPP TS 23.228** | [IMS Architecture](https://www.3gpp.org/dynareport/23228.htm) |
+| **3GPP TS 24.229** | [SIP & SDP for IMS](https://www.3gpp.org/dynareport/24229.htm) |
 | **Open5GS Docs** | [open5gs.org/open5gs/docs](https://open5gs.org/open5gs/docs/) |
 | **UERANSIM Wiki** | [github.com/aligungr/UERANSIM/wiki](https://github.com/aligungr/UERANSIM/wiki) |
 

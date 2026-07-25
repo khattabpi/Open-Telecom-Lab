@@ -24,7 +24,7 @@
 - [ ] Wireshark display filters & coloring rules for 5G protocols
 - [ ] Annotated PCAP samples with step-by-step guides
 
-## 📋 v2.x — IMS & Voice Services `PLANNED`
+## 🟢 v2.x — IMS & Voice Services `PLANNED`
 
 - [ ] IMS Core deployment (Kamailio / Open5GS IMS)
 - [ ] SIP registration and call setup
