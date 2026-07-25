@@ -20,6 +20,7 @@
   <img src="https://img.shields.io/badge/3GPP-Release_17-orange?style=flat-square" alt="3GPP Release">
   <img src="https://img.shields.io/badge/Open5GS-v2.8.0-brightgreen?style=flat-square" alt="Open5GS">
   <img src="https://img.shields.io/badge/UERANSIM-v3.3.0-brightgreen?style=flat-square" alt="UERANSIM">
+  <img src="https://img.shields.io/badge/Docker_Compose-v2.x-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/Ubuntu-24.04_LTS-E95420?style=flat-square&logo=ubuntu&logoColor=white" alt="Ubuntu">
   <img src="https://img.shields.io/badge/MongoDB-8.0-47A248?style=flat-square&logo=mongodb&logoColor=white" alt="MongoDB">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
@@ -30,7 +31,7 @@
 
 ## 📖 Overview
 
-**Open Telecom Lab** is a comprehensive, real-world 5G Standalone (SA) network laboratory built on Ubuntu 24.04 LTS using open-source network functions. This project documents a complete engineering journey — from deploying a functional 5G Core Network to analyzing protocol-level packet flows, and now extending into IMS bearer infrastructure.
+**Open Telecom Lab** is a comprehensive, real-world 5G Standalone (SA) network laboratory built using open-source network functions. This project documents a complete engineering journey — from deploying a functional 5G Core Network natively or via **Docker Compose**, to analyzing protocol-level packet flows, and implementing dual-slice IMS bearer infrastructure.
 
 This is **not a tutorial**. It is a living, evolving telecom engineering portfolio that grows as new technologies are integrated, tested, and documented.
 
@@ -38,11 +39,11 @@ This is **not a tutorial**. It is a living, evolving telecom engineering portfol
 
 | Aspect | This Project | Typical Tutorials |
 |--------|-------------|-------------------|
-| **Deployment** | Native Ubuntu (production-like) | Docker copy-paste |
-| **Documentation** | Protocol-level analysis | Surface-level setup |
-| **Scope** | Full 5G SA + Dual-Slice + IMS Bearer | Single component |
+| **Deployment** | Native Ubuntu 24.04 LTS & Modular Docker Compose (Open5GS v2.8.0) | Copy-paste single script |
+| **Documentation** | Protocol-level analysis (NGAP, NAS, PFCP, GTP-U) | Surface-level setup |
+| **Scope** | Full 5G SA + Dual-Slice + IMS Bearer + Containerized SBA | Single component |
 | **Evolution** | Versioned roadmap (v1–v8) | One-shot guide |
-| **Analysis** | Wireshark + tcpdump captures | No verification |
+| **Analysis** | Wireshark + tcpdump PCAP validation & engineering notes | No verification |
 
 ---
 
@@ -62,12 +63,13 @@ This is **not a tutorial**. It is a living, evolving telecom engineering portfol
 - [x] **Protocol Captures** — tcpdump/Wireshark PCAP analysis (NGAP, NAS, PFCP, GTP-U)
 - [x] **Network Namespace Isolation** — UE traffic isolation via Linux namespaces
 
-### v2.0 — IMS Bearer & Dual-Slice Infrastructure
+### v2.0 — IMS Bearer, Dual-Slice Infrastructure & Docker Containerization
+- [x] **Containerized 5G Core (Docker Compose)** — Complete microservices setup with Open5GS v2.8.0 multi-stage build, healthchecks, and dedicated SBA bridge network (`172.20.0.0/24`)
 - [x] **Dual PDU Sessions** — Simultaneous `internet` (PSI[1]) and `ims` (PSI[2]) sessions on the same UE
 - [x] **IMS UPF Interface** — Secondary TUN interface (`ogstun2`) on `10.46.0.0/16` for IMS slice traffic
 - [x] **Dual-DNN SMF/UPF Config** — `pdu_session` and `subnet` entries extended for DNN `ims` in `smf.yaml` and `upf.yaml`
 - [x] **Policy Routing Fix** — High-priority `ip rule` entries (`priority 100`) injected to route decapsulated GTP-U packets to the main table, eliminating routing loops through `uesimtun` interfaces
-- [x] **Dual-Subnet NAT** — `iptables MASQUERADE` configured for both `10.45.0.0/16` and `10.46.0.0/16` over the WAN interface (`wlp58s0`)
+- [x] **Dual-Subnet NAT** — `iptables MASQUERADE` configured for both `10.45.0.0/16` and `10.46.0.0/16` over the WAN interface
 - [x] **Kernel rp_filter Disabled** — Reverse path filtering turned off on TUN interfaces to allow asymmetric user-plane flows
 - [x] **PLMN Synchronization** — `mcc: '001'` / `mnc: '01'` aligned between `open5gs-gnb.yaml`, UE config, and AMF subscriber DB
 - [x] **Persistent iptables Rules** — All NAT and FORWARD rules saved via `netfilter-persistent`
@@ -76,7 +78,7 @@ This is **not a tutorial**. It is a living, evolving telecom engineering portfol
 
 ## 🏗️ Architecture
 
-### 5G Standalone Network Architecture (v2.0 — Dual Slice)
+### 5G Standalone Network Architecture (v2.0 — Dual Slice & Docker SBA)
 
 ```mermaid
 graph TB
@@ -91,25 +93,25 @@ graph TB
     subgraph CORE ["🏢 5G Core Network — Open5GS v2.8.0"]
         direction TB
 
-        subgraph CP ["Control Plane"]
-            AMF[AMF<br/>127.0.0.5]
-            SMF[SMF<br/>127.0.0.4]
-            NRF[NRF]
-            AUSF[AUSF]
-            UDM[UDM]
-            UDR[UDR]
-            PCF[PCF]
-            NSSF[NSSF]
-            BSF[BSF]
-            SCP[SCP<br/>127.0.0.200]
+        subgraph CP ["Control Plane (SBA Network: 172.20.0.0/24)"]
+            AMF[AMF<br/>172.20.0.20]
+            SMF[SMF<br/>172.20.0.21]
+            NRF[NRF<br/>172.20.0.10]
+            AUSF[AUSF<br/>172.20.0.13]
+            UDM[UDM<br/>172.20.0.12]
+            UDR[UDR<br/>172.20.0.11]
+            PCF[PCF<br/>172.20.0.16]
+            NSSF[NSSF<br/>172.20.0.14]
+            BSF[BSF<br/>172.20.0.15]
+            SCP[SCP<br/>172.20.0.17]
         end
 
         subgraph UP ["User Plane"]
-            UPF[UPF<br/>127.0.0.7<br/>internet: 10.45.0.0/16<br/>ims: 10.46.0.0/16]
+            UPF[UPF<br/>172.20.0.30<br/>internet: 10.45.0.0/16<br/>ims: 10.46.0.0/16]
         end
 
         subgraph DB ["Data Layer"]
-            MONGO[(MongoDB 8.0<br/>Subscriber DB)]
+            MONGO[(MongoDB 8.0<br/>172.20.0.2)]
         end
     end
 
@@ -215,11 +217,33 @@ sequenceDiagram
 |-----------|-----------|---------|---------|
 | **Operating System** | Ubuntu LTS | 24.04 (Noble) | Host platform |
 | **5G Core** | Open5GS | 2.8.0 | 5G SA core network functions |
+| **Container Runtime** | Docker & Docker Compose | v2.x | Modular microservice containerization |
 | **RAN Simulator** | UERANSIM | 3.3.0 | gNodeB + UE simulation |
-| **Database** | MongoDB | 8.0.26 | Subscriber data store |
+| **Database** | MongoDB | 8.0 | Subscriber data store |
 | **Packet Capture** | tcpdump / Wireshark | Latest | Protocol analysis |
 | **Networking** | Linux Namespaces + iptables | Native | Traffic isolation & NAT |
 | **Firewall Persistence** | netfilter-persistent | Latest | Persistent iptables rules across reboots |
+
+---
+
+## 🐳 Docker Compose Microservices Architecture
+
+The repository provides a complete containerized 5G Core deployment in [`docker-compose/`](docker-compose/).
+
+| Container | Image / Base | IP Address (`5g-sba-net`) | Exposed Ports / Capabilities | Function |
+|-----------|--------------|---------------------------|------------------------------|----------|
+| `mongodb` | `mongo:8.0` | `172.20.0.2` | — | Subscriber Database (Healthchecked) |
+| `open5gs-nrf` | Open5GS 2.8.0 | `172.20.0.10` | `7777:7777` (HTTP/2) | NF Repository Function (Healthchecked) |
+| `open5gs-udr` | Open5GS 2.8.0 | `172.20.0.11` | — | Unified Data Repository |
+| `open5gs-udm` | Open5GS 2.8.0 | `172.20.0.12` | — | Unified Data Management |
+| `open5gs-ausf` | Open5GS 2.8.0 | `172.20.0.13` | — | Authentication Server Function |
+| `open5gs-nssf` | Open5GS 2.8.0 | `172.20.0.14` | — | Network Slice Selection Function |
+| `open5gs-bsf` | Open5GS 2.8.0 | `172.20.0.15` | — | Binding Support Function |
+| `open5gs-pcf` | Open5GS 2.8.0 | `172.20.0.16` | — | Policy Control Function |
+| `open5gs-scp` | Open5GS 2.8.0 | `172.20.0.17` | — | Service Communication Proxy |
+| `open5gs-amf` | Open5GS 2.8.0 | `172.20.0.20` | `38412:38412/sctp` | Access & Mobility Management Function |
+| `open5gs-smf` | Open5GS 2.8.0 | `172.20.0.21` | — | Session Management Function |
+| `open5gs-upf` | Open5GS 2.8.0 | `172.20.0.30` | `2152:2152/udp`, `cap_add: NET_ADMIN`, `/dev/net/tun` | User Plane Function (`ogstun` NAT entrypoint) |
 
 ---
 
@@ -240,22 +264,34 @@ Open-Telecom-Lab/
 │   ├── diagrams/              # Architecture diagrams
 │   └── captures/              # Sample PCAP files
 ├── configs/
-│   ├── open5gs/               # AMF, SMF, UPF, NRF configs
+│   ├── open5gs/               # Native AMF, SMF, UPF, NRF configs
 │   ├── ueransim/              # gNB and UE configs
 │   └── mongodb/               # DB initialization scripts
+├── docker-compose/            # Containerized 5G SA Core Stack (v2.0)
+│   ├── Dockerfile             # Multi-stage Open5GS v2.8.0 image build
+│   ├── docker-compose.yml     # 12-container microservices compose file
+│   └── config/                # Container configuration files & UPF entrypoint
+│       ├── amf.yaml
+│       ├── ausf.yaml
+│       ├── bsf.yaml
+│       ├── nrf.yaml
+│       ├── nssf.yaml
+│       ├── pcf.yaml
+│       ├── scp.yaml
+│       ├── smf.yaml
+│       ├── udm.yaml
+│       ├── udr.yaml
+│       ├── upf.yaml
+│       └── upf-entrypoint.sh
 ├── docs/
 │   ├── architecture/          # Network architecture docs
-│   ├── engineering-notes/     # In-depth technical analysis
+│   ├── engineering-notes/     # Technical analysis & engineering deep-dives
 │   │   ├── why-open5gs.md
 │   │   ├── understanding-amf.md
 │   │   ├── 5g-registration-analysis.md
 │   │   ├── debugging-pdu-session.md
 │   │   └── linux-networking-behind-5g.md
-│   ├── protocols/             # Protocol deep-dives
-│   │   ├── nas/               # NAS procedures (planned v1.x)
-│   │   ├── ngap/              # NGAP analysis (planned v1.x)
-│   │   ├── pfcp/              # PFCP sessions (planned v1.x)
-│   │   └── gtp-u/             # GTP-U tunneling (planned v1.x)
+│   ├── protocols/             # Protocol deep-dives (NAS, NGAP, PFCP, GTP-U)
 │   ├── wireshark/             # Packet capture walkthroughs
 │   ├── troubleshooting/       # Common issues & fixes
 │   └── learning-outcomes/     # Key takeaways per lab
@@ -266,6 +302,8 @@ Open-Telecom-Lab/
 │   ├── lab-04-user-plane/     # End-to-end data path
 │   └── lab-05-ims-bearer/     # Dual-slice IMS bearer setup (v2.0)
 ├── scripts/                   # Automation & helper scripts
+│   ├── add-subscriber.sh      # MongoDB subscriber provisioning script
+│   └── verify-lab.sh          # Automated health check script
 ├── CHANGELOG.md
 ├── CODE_OF_CONDUCT.md
 ├── CONTRIBUTING.md
@@ -283,29 +321,77 @@ Open-Telecom-Lab/
 
 | Requirement | Minimum |
 |-------------|---------|
-| Ubuntu | 22.04+ LTS |
+| Ubuntu / Linux | 22.04+ LTS (Ubuntu 24.04 LTS recommended) |
 | RAM | 4 GB |
 | Disk | 20 GB |
 | CPU | 2 cores |
-| Network | Internet access |
+| Tools | Docker & Docker Compose **or** Native Open5GS build dependencies |
 
-### 1. Install Open5GS
+---
+
+### Option A: Docker Compose Deployment (Fastest & Recommended)
+
+Deploy the entire 5G Core Network stack in containerized microservices using Open5GS v2.8.0.
+
+#### 1. Launch 5G Core Stack
 
 ```bash
+git clone https://github.com/khattabpi/Open-Telecom-Lab.git
+cd Open-Telecom-Lab/docker-compose
+
+# Build and bring up all network functions
+docker compose up -d --build
+```
+
+#### 2. Verify Container Health
+
+```bash
+docker compose ps
+```
+*All services (`mongodb`, `nrf`, `amf`, `smf`, `upf`, etc.) should be in `healthy` or `running` state.*
+
+#### 3. Build & Run UERANSIM (Host RAN Simulator)
+
+```bash
+# Install host dependencies
+sudo apt update && sudo apt install -y make gcc g++ libsctp-dev lksctp-tools iproute2
+
+# Build UERANSIM
+git clone https://github.com/aligungr/UERANSIM
+cd UERANSIM && make
+
+# Start gNodeB
+sudo ./build/nr-gnb -c ../configs/ueransim/open5gs-gnb.yaml
+
+# Start UE (in a second terminal)
+sudo ./build/nr-ue -c ../configs/ueransim/open5gs-ue.yaml
+```
+
+---
+
+### Option B: Native Ubuntu Deployment
+
+#### 1. Install Open5GS & MongoDB
+
+```bash
+# Add Open5GS repository
 sudo add-apt-repository ppa:open5gs/latest
 sudo apt update
 sudo apt install -y open5gs
-```
 
-### 2. Install MongoDB
-
-```bash
-# See: https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/
+# Install & enable MongoDB
 sudo apt install -y mongodb-org
 sudo systemctl enable --now mongod
 ```
 
-### 3. Build UERANSIM
+#### 2. Provision Test Subscriber
+
+```bash
+# Use the automated provisioning script
+sudo bash scripts/add-subscriber.sh
+```
+
+#### 3. Build UERANSIM
 
 ```bash
 sudo apt install -y make gcc g++ libsctp-dev lksctp-tools iproute2
@@ -313,12 +399,9 @@ git clone https://github.com/aligungr/UERANSIM
 cd UERANSIM && make
 ```
 
-### 4. Configure the Network
+#### 4. Configure Kernel & Policy Routing
 
 ```bash
-# Add subscriber via Open5GS WebUI (http://localhost:9999)
-# Add both DNNs: internet and ims
-
 # Enable IP forwarding
 sudo sysctl -w net.ipv4.ip_forward=1
 
@@ -330,7 +413,7 @@ sudo sysctl -w net.ipv4.conf.ogstun2.rp_filter=0
 sudo ip rule add from 10.45.0.0/16 lookup main priority 100
 sudo ip rule add from 10.46.0.0/16 lookup main priority 100
 
-# NAT for both slices (replace wlp58s0 with your WAN interface)
+# NAT for both slices (detect default WAN interface)
 WAN=$(ip route show default | awk '{print $5}')
 sudo iptables -t nat -A POSTROUTING -s 10.45.0.0/16 -o $WAN -j MASQUERADE
 sudo iptables -t nat -A POSTROUTING -s 10.46.0.0/16 -o $WAN -j MASQUERADE
@@ -346,7 +429,7 @@ sudo apt install -y iptables-persistent
 sudo netfilter-persistent save
 ```
 
-### 5. Start the Lab
+#### 5. Start the Lab & Verify Connectivity
 
 ```bash
 # Terminal 1 — Start gNodeB
@@ -355,24 +438,16 @@ sudo ./build/nr-gnb -c config/open5gs-gnb.yaml
 
 # Terminal 2 — Start UE
 sudo ./build/nr-ue -c config/open5gs-ue.yaml
-```
 
-### 6. Verify Connectivity
-
-```bash
-# Expected log output:
-# "Initial Registration is successful"
-# "PDU Session establishment is successful PSI[1]"  ← internet
-# "PDU Session establishment is successful PSI[2]"  ← ims
-
-# Test internet slice
+# Terminal 3 — Test Slices
+# Test internet slice (PSI[1])
 sudo ip netns exec ueransim-001010000000001-internet-psi1 ping -c 4 8.8.8.8
 
-# Test IMS bearer slice
+# Test IMS bearer slice (PSI[2])
 sudo ip netns exec ueransim-001010000000001-ims-psi2 ping -c 4 10.46.0.1
 
-# Test DNS
-sudo ip netns exec ueransim-001010000000001-internet-psi1 curl -I https://www.google.com
+# Automated Lab Verification Script
+sudo bash scripts/verify-lab.sh
 ```
 
 ---
@@ -391,15 +466,6 @@ sudo ip netns exec ueransim-001010000000001-internet-psi1 curl -I https://www.go
 | **UE Subnet** | 10.45.0.0/16 | 10.46.0.0/16 | PDU session IP pool |
 | **UE Gateway** | 10.45.0.1 (ogstun) | 10.46.0.1 (ogstun2) | UPF gateway address |
 | **PDU Session** | PSI[1] / uesimtun0 | PSI[2] / uesimtun1 | UE TUN interface |
-
-### Core Network Addresses
-
-| NF | SBI Address | Service Port | Protocol |
-|----|-------------|-------------|----------|
-| **AMF** | 127.0.0.5 | 7777 | NGAP: SCTP/38412 |
-| **SMF** | 127.0.0.4 | 7777 | PFCP: UDP |
-| **UPF** | 127.0.0.7 | — | GTP-U: UDP/2152 |
-| **SCP** | 127.0.0.200 | 7777 | HTTP/2 |
 
 ### Subscriber Credentials
 
@@ -421,11 +487,11 @@ sudo ip netns exec ueransim-001010000000001-internet-psi1 curl -I https://www.go
 
 ---
 
-## 📡 Network Architecture Diagram
+## 📡 Network Architecture & Routing Diagram
 
 ```mermaid
 graph LR
-    subgraph HOST ["Ubuntu 24.04 LTS Host"]
+    subgraph HOST ["Ubuntu Host Platform"]
         direction TB
 
         subgraph NS_UE ["Network Namespace: ueransim-*"]
@@ -433,16 +499,16 @@ graph LR
             TUN1[uesimtun1<br/>10.46.0.x/16<br/>DNN: ims]
         end
 
-        subgraph CORE_NET ["Loopback Network Stack"]
-            AMF_N["AMF N2<br/>127.0.0.1:38412"]
-            UPF_N3["UPF N3<br/>127.0.0.7"]
-            UPF_N4["UPF N4<br/>127.0.0.7"]
-            SMF_N4["SMF N4<br/>127.0.0.4"]
+        subgraph CORE_NET ["5G Core Stack / Docker Bridge"]
+            AMF_N["AMF N2<br/>SCTP :38412"]
+            UPF_N3["UPF N3<br/>UDP :2152"]
+            UPF_N4["UPF N4<br/>PFCP"]
+            SMF_N4["SMF N4<br/>PFCP"]
             OGSTUN["ogstun<br/>10.45.0.1/16"]
             OGSTUN2["ogstun2<br/>10.46.0.1/16"]
         end
 
-        IPTABLES["iptables NAT<br/>MASQUERADE (wlp58s0)<br/>+ FORWARD ACCEPT"]
+        IPTABLES["iptables NAT<br/>MASQUERADE (WAN)<br/>+ FORWARD ACCEPT"]
         IPRULE["ip rule priority 100<br/>→ main table"]
     end
 
@@ -502,19 +568,19 @@ graph LR
 
 ```bash
 # Capture NGAP (N2 interface)
-sudo tcpdump -i lo -w ngap.pcap sctp port 38412
+sudo tcpdump -i any -w ngap.pcap sctp port 38412
 
 # Capture PFCP (N4 interface)
-sudo tcpdump -i lo -w pfcp.pcap udp port 8805
+sudo tcpdump -i any -w pfcp.pcap udp port 8805
 
 # Capture GTP-U (N3 interface)
-sudo tcpdump -i lo -w gtpu.pcap udp port 2152
+sudo tcpdump -i any -w gtpu.pcap udp port 2152
 
 # Capture IMS bearer traffic on ogstun2
 sudo tcpdump -i ogstun2 -n -w ims_bearer.pcap
 
 # Capture all 5G traffic
-sudo tcpdump -i lo -w 5g_all.pcap \
+sudo tcpdump -i any -w 5g_all.pcap \
   'sctp port 38412 or udp port 8805 or udp port 2152'
 ```
 
@@ -528,9 +594,9 @@ sudo tcpdump -i lo -w 5g_all.pcap \
 **Cause:** PLMN mismatch between UE config and AMF config.
 
 **Fix:** Ensure `mcc`/`mnc` match across:
-- `config/open5gs-ue.yaml` → `mcc: '001'`, `mnc: '01'`
-- `config/open5gs-gnb.yaml` → `mcc: '001'`, `mnc: '01'`
-- `/etc/open5gs/amf.yaml` → `plmn_id` under `tai` and `plmn_support`
+- `configs/ueransim/open5gs-ue.yaml` → `mcc: '001'`, `mnc: '01'`
+- `configs/ueransim/open5gs-gnb.yaml` → `mcc: '001'`, `mnc: '01'`
+- AMF config / Docker config → `plmn_id` under `tai` and `plmn_support`
 
 </details>
 
@@ -540,8 +606,8 @@ sudo tcpdump -i lo -w 5g_all.pcap \
 **Cause:** SMF cannot reach UPF via PFCP, or S-NSSAI/DNN mismatch.
 
 **Fix:**
-1. Verify UPF is running: `sudo systemctl status open5gs-upfd`
-2. Check PFCP addresses match: SMF client → `127.0.0.7`, UPF server → `127.0.0.7`
+1. Verify UPF status: `docker compose ps open5gs-upf` or `sudo systemctl status open5gs-upfd`
+2. Check PFCP configuration: SMF client → UPF server IP
 3. Verify `sd: ffffff` in `smf.yaml` matches the UE slice config
 4. Confirm the DNN (`internet` or `ims`) exists in both `smf.yaml` `pdu_session` and subscriber DB
 
@@ -550,11 +616,8 @@ sudo tcpdump -i lo -w 5g_all.pcap \
 <details>
 <summary><strong>UE has IP but no internet access — 100% packet loss</strong></summary>
 
-**Cause 1 — Docker FORWARD DROP policy:**
-Docker sets the kernel FORWARD chain policy to `DROP`, blocking UPF traffic before it reaches the NAT rule. Check with:
-```bash
-sudo nft list ruleset | grep "policy drop"
-```
+**Cause 1 — Docker / Host FORWARD DROP policy:**
+Docker sets the kernel FORWARD chain policy to `DROP`, blocking UPF traffic before it reaches the NAT rule.
 
 **Fix:**
 ```bash
@@ -566,11 +629,8 @@ sudo netfilter-persistent save
 **Cause 2 — NAT rule targeting wrong interface:**
 The MASQUERADE rule must target the actual WAN interface, not `ogstun`.
 ```bash
-# Find your WAN interface
-ip route show default | awk '{print $5}'
-
-# Apply correct rule
-sudo iptables -t nat -A POSTROUTING -s 10.45.0.0/16 -o <WAN_IFACE> -j MASQUERADE
+WAN=$(ip route show default | awk '{print $5}')
+sudo iptables -t nat -A POSTROUTING -s 10.45.0.0/16 -o $WAN -j MASQUERADE
 ```
 
 **Cause 3 — IP forwarding disabled:**
@@ -625,18 +685,16 @@ gantt
 
     section v1.x — Foundation
     5G SA Core Deployment           :done,    v1a, 2026-Q2, 2026-Q3
-    Protocol Documentation          :active,  v1b, 2026-Q3, 2026-Q4
+    Protocol Documentation          :done,    v1b, 2026-Q3, 2026-Q4
 
-    section v2.x — IMS & Voice
+    section v2.x — IMS, Containerization & Voice
     IMS Bearer & Dual-Slice         :done,    v2a, 2026-Q3, 2026-Q4
+    Docker Compose Containerization :done,    v2c, 2026-Q3, 2026-Q4
     SIP / VoLTE / RTP Call Flow     :active,  v2b, 2026-Q4, 2027-Q2
 
     section v3.x — LTE Comparison
     EPC vs 5GC Architecture         :         v3a, 2027-Q2, 2027-Q3
     Mobility & Handover             :         v3b, 2027-Q3, 2027-Q3
-
-    section v4.x — Containerization
-    Docker Deployment               :         v4a, 2027-Q3, 2027-Q4
 
     section v5.x — Orchestration
     Kubernetes Deployment           :         v5a, 2027-Q4, 2028-Q1
@@ -656,21 +714,18 @@ gantt
 | Version | Scope | Status |
 |---------|-------|--------|
 | **v1.0** | 5G SA Core + UE + PDU Session + Internet | ✅ **Implemented** |
-| **v1.x** | Protocol walkthroughs (NAS, NGAP, PFCP, GTP-U) | 🔄 In Progress |
-| **v2.0** | IMS Bearer + Dual-Slice + Kernel Routing Fixes | ✅ **Implemented** |
+| **v1.x** | Protocol walkthroughs (NAS, NGAP, PFCP, GTP-U) | ✅ **Implemented** |
+| **v2.0** | IMS Bearer + Dual-Slice + Kernel Routing Fixes + Docker Compose Open5GS v2.8.0 | ✅ **Implemented** |
 | **v2.x** | SIP Registration + VoLTE Call Flow + RTP Analysis | 🔄 In Progress |
 | **v3.x** | LTE EPC comparison, Mobility, Handover | 📋 Planned |
-| **v4.x** | Docker deployment | 📋 Planned |
-| **v5.x** | Kubernetes deployment | 📋 Planned |
+| **v5.x** | Kubernetes deployment (Helm charts) | 📋 Planned |
 | **v6.x** | Monitoring (Prometheus + Grafana) | 📋 Planned |
 | **v7.x** | CI/CD (GitHub Actions) | 📋 Planned |
 | **v8.x** | Cloud (OpenStack, K3s, AWS) | 📋 Planned |
 
 ---
 
-## 📝 Documentation
-
-### Engineering Notes
+## 📝 Documentation & Engineering Notes
 
 In-depth technical analysis for 5G Core engineers:
 
@@ -688,10 +743,11 @@ In-depth technical analysis for 5G Core engineers:
 
 ## 📚 Learning Outcomes
 
-After completing the v1.0 + v2.0 labs, you will understand:
+After completing the labs in this repository, you will master:
 
-- **3GPP 5G SA Architecture** — How NFs interact via SBI and reference points
-- **NAS Protocol** — Registration, authentication, and session management procedures
+- **3GPP 5G SA Architecture** — How NFs interact via SBI (HTTP/2) and reference points (N1, N2, N3, N4, N6)
+- **Containerized Telecom Operations** — Multi-service orchestration with Docker Compose, SBA bridge networks, and containerized UPF privileged TUN interfaces
+- **NAS Protocol** — Registration, 5G-AKA authentication, and session management procedures
 - **NGAP** — N2 signaling between gNodeB and AMF over SCTP
 - **PFCP** — N4 session management between SMF and UPF
 - **GTP-U** — N3 user plane tunneling across dual PDU sessions
