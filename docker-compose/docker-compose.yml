@@ -1,0 +1,215 @@
+version: '3.8'
+
+networks:
+  sba-network:
+    name: 5g-sba-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+volumes:
+  mongodb-data:
+
+services:
+  mongodb:
+    image: mongo:8.0
+    container_name: mongodb
+    restart: always
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.2
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nrf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: open5gs-nrf
+    command: open5gs-nrfd -c /usr/local/etc/open5gs/nrf.yaml
+    restart: always
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.10
+    volumes:
+      - ./config/nrf.yaml:/usr/local/etc/open5gs/nrf.yaml
+    ports:
+      - "7777:7777"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/7777' 2>/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  udr:
+    build: .
+    container_name: open5gs-udr
+    command: open5gs-udrd -c /usr/local/etc/open5gs/udr.yaml
+    restart: always
+    depends_on:
+      nrf:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.11
+    volumes:
+      - ./config/udr.yaml:/usr/local/etc/open5gs/udr.yaml
+
+  udm:
+    build: .
+    container_name: open5gs-udm
+    command: open5gs-udmd -c /usr/local/etc/open5gs/udm.yaml
+    restart: always
+    depends_on:
+      nrf:
+        condition: service_healthy
+      udr:
+        condition: service_started
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.12
+    volumes:
+      - ./config/udm.yaml:/usr/local/etc/open5gs/udm.yaml
+
+  ausf:
+    build: .
+    container_name: open5gs-ausf
+    command: open5gs-ausfd -c /usr/local/etc/open5gs/ausf.yaml
+    restart: always
+    depends_on:
+      nrf:
+        condition: service_healthy
+      udm:
+        condition: service_started
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.13
+    volumes:
+      - ./config/ausf.yaml:/usr/local/etc/open5gs/ausf.yaml
+
+  nssf:
+    build: .
+    container_name: open5gs-nssf
+    command: open5gs-nssfd -c /usr/local/etc/open5gs/nssf.yaml
+    restart: always
+    depends_on:
+      nrf:
+        condition: service_healthy
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.14
+    volumes:
+      - ./config/nssf.yaml:/usr/local/etc/open5gs/nssf.yaml
+
+  bsf:
+    build: .
+    container_name: open5gs-bsf
+    command: open5gs-bsfd -c /usr/local/etc/open5gs/bsf.yaml
+    restart: always
+    depends_on:
+      nrf:
+        condition: service_healthy
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.15
+    volumes:
+      - ./config/bsf.yaml:/usr/local/etc/open5gs/bsf.yaml
+
+  pcf:
+    build: .
+    container_name: open5gs-pcf
+    command: open5gs-pcfd -c /usr/local/etc/open5gs/pcf.yaml
+    restart: always
+    depends_on:
+      nrf:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.16
+    volumes:
+      - ./config/pcf.yaml:/usr/local/etc/open5gs/pcf.yaml
+
+  scp:
+    build: .
+    container_name: open5gs-scp
+    command: open5gs-scpd -c /usr/local/etc/open5gs/scp.yaml
+    restart: always
+    depends_on:
+      nrf:
+        condition: service_healthy
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.17
+    volumes:
+      - ./config/scp.yaml:/usr/local/etc/open5gs/scp.yaml
+
+  amf:
+    build: .
+    container_name: open5gs-amf
+    command: open5gs-amfd -c /usr/local/etc/open5gs/amf.yaml
+    restart: always
+    depends_on:
+      nrf:
+        condition: service_healthy
+      ausf:
+        condition: service_started
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.20
+    volumes:
+      - ./config/amf.yaml:/usr/local/etc/open5gs/amf.yaml
+    ports:
+      - "38412:38412/sctp"
+
+  smf:
+    build: .
+    container_name: open5gs-smf
+    command: open5gs-smfd -c /usr/local/etc/open5gs/smf.yaml
+    restart: always
+    depends_on:
+      nrf:
+        condition: service_healthy
+      amf:
+        condition: service_started
+      pcf:
+        condition: service_started
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.21
+    volumes:
+      - ./config/smf.yaml:/usr/local/etc/open5gs/smf.yaml
+
+  upf:
+    build: .
+    container_name: open5gs-upf
+    command: /bin/bash /usr/local/etc/open5gs/upf-entrypoint.sh
+    restart: always
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    depends_on:
+      smf:
+        condition: service_started
+    networks:
+      sba-network:
+        ipv4_address: 172.20.0.30
+    volumes:
+      - ./config/upf.yaml:/usr/local/etc/open5gs/upf.yaml
+      - ./config/upf-entrypoint.sh:/usr/local/etc/open5gs/upf-entrypoint.sh
+    ports:
+      - "2152:2152/udp"
