@@ -92,7 +92,7 @@
              | NR-Uu                                                           |
   +----------+----------+                                           +----------+----------+
   |    UERANSIM UE      |                                           |  N6 Data Networks   |
-  | IMSI: 001010000000001|                                           |  DNN: internet / ims|
+  | IMSI:001010000000001|                                           |  DNN: internet / ims|
   +---------------------+                                           +---------------------+
 ```
 
@@ -101,14 +101,14 @@
 ```text
 📱 UE           📡 gNodeB          open5gs-amf        open5gs-nrf        open5gs-smf        open5gs-upf
   |                 |                  |                  |                  |                  |
-  |=== Phase 1: 5G-AKA Registration =============================================================|
+  |=== Phase 1: 5G-AKA Registration ============================================================|
   |-- RRC Setup --->|                  |                  |                  |                  |
   |                 |-- NGAP Initial ->|                  |                  |                  |
   |                 |                  |-- SBI Discovery->|                  |                  |
-  |<============== 5G-AKA Auth & Security Complete =============================================>|
+  |<============== 5G-AKA Auth & Security Complete ============================================>|
   |                 |<-- Reg Accept ---|                  |                  |                  |
   |                 |                  |                  |                  |                  |
-  |=== Phase 2: Primary PDU Session (DNN: internet) =============================================|
+  |=== Phase 2: Primary PDU Session (DNN: internet) ============================================|
   |-- NAS PDU Estab Req (PSI[1], SST:1, DNN:internet) --->|                  |                  |
   |                 |                  |-- CreateSMContext ----------------->|                  |
   |                 |                  |                  |                  |-- N4 Estab Req ->|
