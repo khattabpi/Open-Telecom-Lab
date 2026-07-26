@@ -1,0 +1,307 @@
+# --- NRF Service & Deployment ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-nrf
+  namespace: open5gs
+spec:
+  ports:
+    - port: 7777
+      name: sbi
+      protocol: TCP
+  selector:
+    app: open5gs-nrf
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-nrf
+  namespace: open5gs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-nrf
+  template:
+    metadata:
+      labels:
+        app: open5gs-nrf
+    spec:
+      containers:
+        - name: nrf
+          image: gradiant/open5gs:2.8.0
+          command: ["open5gs-nrfd", "-c", "/etc/open5gs/nrf.yaml"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/open5gs/nrf.yaml
+              subPath: nrf.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: open5gs-config
+---
+# --- UDR Service & Deployment ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-udr
+  namespace: open5gs
+spec:
+  ports:
+    - port: 7777
+      name: sbi
+      protocol: TCP
+  selector:
+    app: open5gs-udr
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-udr
+  namespace: open5gs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-udr
+  template:
+    metadata:
+      labels:
+        app: open5gs-udr
+    spec:
+      containers:
+        - name: udr
+          image: gradiant/open5gs:2.8.0
+          env:
+            - name: DB_URI
+              value: mongodb://mongodb:27017/open5gs
+          command: ["open5gs-udrd", "-c", "/etc/open5gs/udr.yaml"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/open5gs/udr.yaml
+              subPath: udr.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: open5gs-config
+---
+# --- UDM Service & Deployment ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-udm
+  namespace: open5gs
+spec:
+  ports:
+    - port: 7777
+      name: sbi
+      protocol: TCP
+  selector:
+    app: open5gs-udm
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-udm
+  namespace: open5gs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-udm
+  template:
+    metadata:
+      labels:
+        app: open5gs-udm
+    spec:
+      containers:
+        - name: udm
+          image: gradiant/open5gs:2.8.0
+          command: ["open5gs-udmd", "-c", "/etc/open5gs/udm.yaml"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/open5gs/udm.yaml
+              subPath: udm.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: open5gs-config
+---
+# --- AUSF Service & Deployment ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-ausf
+  namespace: open5gs
+spec:
+  ports:
+    - port: 7777
+      name: sbi
+      protocol: TCP
+  selector:
+    app: open5gs-ausf
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-ausf
+  namespace: open5gs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-ausf
+  template:
+    metadata:
+      labels:
+        app: open5gs-ausf
+    spec:
+      containers:
+        - name: ausf
+          image: gradiant/open5gs:2.8.0
+          command: ["open5gs-ausfd", "-c", "/etc/open5gs/ausf.yaml"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/open5gs/ausf.yaml
+              subPath: ausf.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: open5gs-config
+---
+# --- AMF Service & Deployment ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-amf
+  namespace: open5gs
+spec:
+  type: NodePort
+  ports:
+    - port: 7777
+      name: sbi
+      protocol: TCP
+    - port: 38412
+      nodePort: 38412
+      name: ngap
+      protocol: SCTP
+  selector:
+    app: open5gs-amf
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-amf
+  namespace: open5gs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-amf
+  template:
+    metadata:
+      labels:
+        app: open5gs-amf
+    spec:
+      containers:
+        - name: amf
+          image: gradiant/open5gs:2.8.0
+          command: ["open5gs-amfd", "-c", "/etc/open5gs/amf.yaml"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/open5gs/amf.yaml
+              subPath: amf.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: open5gs-config
+---
+# --- SMF Service & Deployment ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-smf
+  namespace: open5gs
+spec:
+  ports:
+    - port: 7777
+      name: sbi
+      protocol: TCP
+    - port: 8805
+      name: pfcp
+      protocol: UDP
+  selector:
+    app: open5gs-smf
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-smf
+  namespace: open5gs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-smf
+  template:
+    metadata:
+      labels:
+        app: open5gs-smf
+    spec:
+      containers:
+        - name: smf
+          image: gradiant/open5gs:2.8.0
+          command: ["open5gs-smfd", "-c", "/etc/open5gs/smf.yaml"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/open5gs/smf.yaml
+              subPath: smf.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: open5gs-config
+---
+# --- PCF Service & Deployment ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-pcf
+  namespace: open5gs
+spec:
+  ports:
+    - port: 7777
+      name: sbi
+      protocol: TCP
+  selector:
+    app: open5gs-pcf
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-pcf
+  namespace: open5gs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-pcf
+  template:
+    metadata:
+      labels:
+        app: open5gs-pcf
+    spec:
+      containers:
+        - name: pcf
+          image: gradiant/open5gs:2.8.0
+          env:
+            - name: DB_URI
+              value: mongodb://mongodb:27017/open5gs
+          command: ["open5gs-pcfd", "-c", "/etc/open5gs/pcf.yaml"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/open5gs/pcf.yaml
+              subPath: pcf.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: open5gs-config

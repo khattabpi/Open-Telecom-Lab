@@ -1,0 +1,26 @@
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: open5gs-cluster
+nodes:
+- role: control-plane
+  extraMounts:
+  - hostPath: /dev/net/tun
+    containerPath: /dev/net/tun
+  extraPortMappings:
+  - containerPort: 38412
+    hostPort: 38412
+    protocol: SCTP
+  - containerPort: 2152
+    hostPort: 2152
+    listenAddress: "0.0.0.0"
+    protocol: UDP
+  - containerPort: 8805
+    hostPort: 8805
+    listenAddress: "0.0.0.0"
+    protocol: UDP
+  kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    apiServer:
+      extraArgs:
+        service-node-port-range: "2000-40000"
