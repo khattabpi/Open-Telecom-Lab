@@ -3,8 +3,8 @@
 # Reference: UERANSIM Wiki + 3GPP TS 38.413
 
 # PLMN Identity (Test Network)
-mcc: '001'
-mnc: '01'
+mcc: '602'
+mnc: '03'
 
 # NR Cell Identity
 nci: '0x000000010'
