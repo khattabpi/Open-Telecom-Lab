@@ -10,10 +10,11 @@ nodes:
   - containerPort: 38412
     hostPort: 38412
     protocol: SCTP
-  - containerPort: 2152
-    hostPort: 2152
-    listenAddress: "0.0.0.0"
-    protocol: UDP
+  # NOTE: 2152/udp (GTP-U) is intentionally NOT mapped to the host.
+  # The UPF runs with hostNetwork: true, so it binds 2152 directly on the
+  # node IP (172.19.0.2), reachable from the host over the kind bridge.
+  # Mapping it here would make docker-proxy hold host 0.0.0.0:2152 and block
+  # a local UERANSIM gNB from binding GTP-U. Reach the UPF at 172.19.0.2:2152.
   - containerPort: 8805
     hostPort: 8805
     listenAddress: "0.0.0.0"

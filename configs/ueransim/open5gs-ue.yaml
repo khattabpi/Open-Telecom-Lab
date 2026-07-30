@@ -1,6 +1,5 @@
 # UERANSIM UE Configuration for Open5GS
 # Open Telecom Lab — v1.0
-# Reference: 3GPP TS 24.501, TS 33.501
 
 # ─── Subscriber Identity ───────────────────────────────────────
 supi: 'imsi-001010000000001'
@@ -20,7 +19,7 @@ routingIndicator: '0000'
 key: '465B5CE8B199B49FAA5F0A2EE238A6BC'
 
 # Operator Code (OPc) — derived from OP and K
-op: 'E8ED2441347B7990E92C19B0316CD6FC'
+op: 'E8ED289DEBA952E4283B54E88E6183CA'
 opType: 'OPC'
 
 # Authentication Management Field
@@ -60,16 +59,16 @@ sessions:
     apn: 'internet'
     slice:
       sst: 1
-      sd: 16777215        # 0xFFFFFF in decimal
+      sd: 0xFFFFFF
 
 # ─── Network Slicing ───────────────────────────────────────────
 configured-nssai:
   - sst: 1
-    sd: 16777215
+    sd: 0xFFFFFF
 
 default-nssai:
   - sst: 1
-    sd: 16777215
+    sd: 0xFFFFFF
 
 # ─── Security Algorithms ───────────────────────────────────────
 integrity:

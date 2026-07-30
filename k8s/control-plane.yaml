@@ -305,3 +305,48 @@ spec:
         - name: config-volume
           configMap:
             name: open5gs-config
+---
+# --- BSF Service & Deployment ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-bsf
+  namespace: open5gs
+spec:
+  ports:
+    - port: 7777
+      name: sbi
+      protocol: TCP
+  selector:
+    app: open5gs-bsf
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-bsf
+  namespace: open5gs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-bsf
+  template:
+    metadata:
+      labels:
+        app: open5gs-bsf
+    spec:
+      containers:
+        - name: bsf
+          image: gradiant/open5gs:2.8.0
+          env:
+            - name: DB_URI
+              value: mongodb://mongodb:27017/open5gs
+          command: ["open5gs-bsfd", "-c", "/etc/open5gs/bsf.yaml"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/open5gs/bsf.yaml
+              subPath: bsf.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: open5gs-config
