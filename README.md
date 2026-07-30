@@ -1,3 +1,6 @@
+
+---
+
 <p align="center">
   <img src="assets/images/banner.png" alt="Open Telecom Lab Banner" width="100%">
 </p>
@@ -680,33 +683,33 @@ sudo sysctl -w net.ipv4.conf.all.rp_filter=0
 ```mermaid
 gantt
     title Open Telecom Lab — Development Roadmap
-    dateFormat YYYY-Q
+    dateFormat YYYY-MM-DD
     axisFormat %Y-Q%q
 
     section v1.x — Foundation
-    5G SA Core Deployment           :done,    v1a, 2026-Q2, 2026-Q3
-    Protocol Documentation          :done,    v1b, 2026-Q3, 2026-Q4
+    5G SA Core Deployment           :done,    v1a, 2026-04-01, 2026-09-30
+    Protocol Documentation          :done,    v1b, 2026-07-01, 2026-12-31
 
     section v2.x — IMS, Containerization & Voice
-    IMS Bearer & Dual-Slice         :done,    v2a, 2026-Q3, 2026-Q4
-    Docker Compose Containerization :done,    v2c, 2026-Q3, 2026-Q4
-    SIP / VoLTE / RTP Call Flow     :active,  v2b, 2026-Q4, 2027-Q2
+    IMS Bearer & Dual-Slice         :done,    v2a, 2026-07-01, 2026-12-31
+    Docker Compose Containerization :done,    v2c, 2026-07-01, 2026-12-31
+    SIP / VoLTE / RTP Call Flow     :active,  v2b, 2026-10-01, 2027-06-30
 
     section v3.x — LTE Comparison
-    EPC vs 5GC Architecture         :         v3a, 2027-Q2, 2027-Q3
-    Mobility & Handover             :         v3b, 2027-Q3, 2027-Q3
+    EPC vs 5GC Architecture         :         v3a, 2027-04-01, 2027-09-30
+    Mobility & Handover             :         v3b, 2027-07-01, 2027-09-30
 
     section v5.x — Orchestration
-    Kubernetes Deployment           :         v5a, 2027-Q4, 2028-Q1
+    Kubernetes Deployment           :         v5a, 2027-10-01, 2028-03-31
 
     section v6.x — Observability
-    Prometheus + Grafana            :         v6a, 2028-Q1, 2028-Q2
+    Prometheus + Grafana            :         v6a, 2028-01-01, 2028-06-30
 
     section v7.x — Automation
-    CI/CD with GitHub Actions       :         v7a, 2028-Q2, 2028-Q3
+    CI/CD with GitHub Actions       :         v7a, 2028-04-01, 2028-09-30
 
     section v8.x — Cloud
-    OpenStack / K3s / AWS           :         v8a, 2028-Q3, 2028-Q4
+    OpenStack / K3s / AWS           :         v8a, 2028-07-01, 2028-12-31
 ```
 
 ### Version Status
@@ -793,3 +796,5 @@ This project is licensed under the [MIT License](LICENSE) — see the LICENSE fi
 <p align="center">
   <sub>Built with ❤️ by <a href="https://github.com/abdulrhamn">Abdulrahman Khattab</a> — Engineering one protocol at a time</sub>
 </p>
+
+---
