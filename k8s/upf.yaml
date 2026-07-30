@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-upf
+  namespace: open5gs
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: open5gs-upf
+  ports:
+    - name: pfcp
+      protocol: UDP
+      port: 8805
+    - name: gtpu
+      protocol: UDP
+      port: 2152
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-upf
+  namespace: open5gs
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: open5gs-upf
+  template:
+    metadata:
+      labels:
+        app: open5gs-upf
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: upf
+          image: gradiant/open5gs:2.8.0
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              mkdir -p /dev/net
+              if [ ! -c /dev/net/tun ]; then
+                mknod /dev/net/tun c 10 200
+                chmod 600 /dev/net/tun
+              fi
+
+              sysctl -w net.ipv4.ip_forward=1 || true
+
+              ip tuntap add dev ogstun mode tun || true
+              ip addr add 10.45.0.1/16 dev ogstun || true
+              ip addr add 10.46.0.1/16 dev ogstun || true
+              ip link set ogstun up || true
+
+              iptables -t nat -A POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE || true
+              iptables -t nat -A POSTROUTING -s 10.46.0.0/16 ! -o ogstun -j MASQUERADE || true
+
+              echo "=== PFCP Server listening on all interfaces ==="
+              exec open5gs-upfd -c /etc/open5gs/upf.yaml
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/open5gs/upf.yaml
+              subPath: upf.yaml
+          ports:
+            - containerPort: 8805
+              protocol: UDP
+              hostPort: 8805
+            - containerPort: 2152
+              protocol: UDP
+              hostPort: 2152
+      volumes:
+        - name: config-volume
+          configMap:
+            name: open5gs-config

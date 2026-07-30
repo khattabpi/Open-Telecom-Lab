@@ -14,7 +14,7 @@ tac: 1
 # Transport Layer Addresses
 linkIp: 127.0.0.1     # gNB local bind
 ngapIp: 127.0.0.1     # N2 interface (SCTP → AMF)
-gtpIp: 127.0.0.1      # N3 interface (GTP-U → UPF)
+gtpIp: 127.0.0.2      # N3 interface (GTP-U → UPF)
 
 # AMF Configuration
 amfConfigs:

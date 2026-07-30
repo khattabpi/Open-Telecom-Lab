@@ -22,7 +22,6 @@
   <img src="https://img.shields.io/badge/3GPP-Release_17-orange?style=flat-square" alt="3GPP Release">
   <img src="https://img.shields.io/badge/Open5GS-v2.8.0-brightgreen?style=flat-square" alt="Open5GS">
   <img src="https://img.shields.io/badge/Docker_Compose-Microservices-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose">
-  <img src="https://img.shields.io/badge/Kubernetes-Kind-326CE5?style=flat-square&logo=kubernetes&logoColor=white" alt="Kubernetes">
   <img src="https://img.shields.io/badge/Ubuntu-24.04_LTS-E95420?style=flat-square&logo=ubuntu&logoColor=white" alt="Ubuntu">
   <img src="https://img.shields.io/badge/MongoDB-8.0-47A248?style=flat-square&logo=mongodb&logoColor=white" alt="MongoDB">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
@@ -41,7 +40,7 @@
 
 | Aspect | This Project | Typical Tutorials |
 | :--- | :--- | :--- |
-| **Deployment** | Native Ubuntu + Docker Compose + Kubernetes | Single shell script setup |
+| **Deployment** | Native Ubuntu + Docker Compose Stack | Single shell script setup |
 | **Data Plane** | Dual-Slice PDU (Internet + IMS) with Policy Routing | Single default internet session |
 | **Documentation** | Protocol-level PFCP/NGAP/SBA analysis | Surface-level installation commands |
 | **Scope** | Full 5G SA end-to-end + Microservices | Isolated single components |
@@ -53,7 +52,6 @@
 
 - **5G SA Core Network:** Open5GS v2.8.0 (AMF, SMF, UPF, NRF, AUSF, UDM, UDR, PCF, NSSF, BSF, SCP).
 - **Microservices Orchestration:** Complete 12-container Docker Compose stack (`v2-docker-compose`) with multi-stage build optimization and healthchecks.
-- **Kubernetes Deployment:** Kind-based cluster with full Open5GS deployment (v3.0 in active development).
 - **Dual-Slice Data Plane:** Simultaneous PDU session support for `internet` (`10.45.0.0/16`) and `ims` (`10.46.0.0/16`) DNNs on a single UE.
 - **Advanced Linux Routing:** Kernel tuning (`rp_filter=0`), priority-based `ip rules` (priority 100), and iptables NAT for asymmetric UPF flows.
 - **Privileged Data Path:** Auto-provisioned `ogstun` TUN interface with Linux capabilities (`NET_ADMIN`) inside UPF containers.
@@ -163,10 +161,6 @@ Open-Telecom-Lab/
 │   ├── 02-configmap.yaml
 │   ├── 03-control-plane.yaml
 │   └── 04-upf.yaml
-├── config/                    # 📱 UERANSIM Configuration Files
-│   └── ueransim/
-│       ├── gnb.yaml           # gNodeB configuration
-│       └── ue.yaml            # UE configuration
 ├── configs/                   # Native deployment configuration files
 ├── docs/                      # Engineering notes & protocol documentation
 ├── labs/                      # Step-by-step lab exercises (Lab 01 - Lab 04)
@@ -180,56 +174,7 @@ Open-Telecom-Lab/
 
 ## 🚀 Quick Start
 
-### Option A: Kubernetes Deployment (Kind) - Recommended for v3.0
-
-#### 1. Prerequisites
-
-```bash
-# Install Kind, kubectl, and Docker
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
-
-# Install kubectl
-curl -LO "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
-chmod +x ./kubectl && sudo mv ./kubectl /usr/local/bin/kubectl
-```
-
-#### 2. Clone & Deploy
-
-```bash
-git clone https://github.com/khattabpi/Open-Telecom-Lab.git
-cd Open-Telecom-Lab/v3-kubernetes
-
-# Create Kind cluster
-kind create cluster --config kind-config.yaml
-
-# Deploy Open5GS Core
-kubectl apply -f 00-namespace.yaml
-kubectl apply -f 02-configmap.yaml
-kubectl apply -f 01-mongodb.yaml
-kubectl apply -f 04-upf.yaml
-kubectl apply -f 03-control-plane.yaml
-
-# Wait for all pods to be ready
-kubectl wait --for=condition=ready pod --all -n open5gs --timeout=300s
-```
-
-#### 3. Start UERANSIM
-
-```bash
-# Start gNodeB (connects to AMF via N2)
-cd ../config/ueransim
-sudo nr-gnb -c gnb.yaml
-
-# In a new terminal, start the UE
-sudo nr-ue -c ue.yaml
-
-# Verify successful registration and PDU session
-ip addr show uesimtun0
-# Expected: inet 10.45.0.2/16 (internet) & inet 10.46.0.2/16 (ims)
-```
-
-### Option B: Containerized Microservices Stack (Docker Compose)
+### Option A: Containerized Microservices Stack (Recommended - v2.0)
 
 #### 1. Clone & Navigate
 
@@ -264,19 +209,21 @@ docker logs open5gs-smf 2>&1 | grep -i "pfcp"
 
 #### 4. Simulate the RAN & Establish Dual-Slice Sessions
 
+Ensure UERANSIM is installed on your host system.
+
 ```bash
 # Start the gNodeB (Connects to AMF via N2)
-nr-gnb -c ../config/ueransim/gnb.yaml
+nr-gnb -c ../configs/gnb.yaml
 
 # In a new terminal, start the UE (Establishes PDU Sessions)
-nr-ue -c ../config/ueransim/ue.yaml
+nr-ue -c ../configs/ue.yaml
 
 # Verify dual IP allocation on the UE
 ip addr show uesimtun0
 # Expected output: inet 10.45.0.x/16 (internet) & inet 10.46.0.x/16 (ims)
 ```
 
-### Option C: Native Ubuntu Deployment (v1.0)
+### Option B: Native Ubuntu Deployment (v1.0)
 
 ```bash
 # 1. Install Open5GS
@@ -329,53 +276,6 @@ gantt
 | v3.0 | 🔄 Active Progress | Kubernetes | Deployments (StatefulSets, ConfigMaps, Capabilities) |
 | v4.0 | 📋 Planned | Observability | Prometheus + Grafana + eBPF metrics |
 | v5.0 | 📋 Planned | CI/CD | Automated Protocol Verification Pipelines |
-
----
-
-## 🔧 UERANSIM Configuration
-
-The UERANSIM configuration files are located in `config/ueransim/`:
-
-| File | Description |
-| :--- | :--- |
-| `gnb.yaml` | gNodeB configuration (PLMN, TAC, AMF address, NSSAI) |
-| `ue.yaml` | UE configuration (IMSI, authentication keys, slices) |
-
-### Sample gnb.yaml:
-```yaml
-mcc: '001'
-mnc: '01'
-nci: '0x000000010'
-idLength: 32
-tac: 1
-linkIp: 127.0.0.1
-ngapIp: 127.0.0.1
-gtpIp: 127.0.0.2
-amfConfigs:
-  - address: 127.0.0.1
-    port: 38412
-slices:
-  - sst: 1
-    sd: 0xffffff
-```
-
-### Sample ue.yaml:
-```yaml
-supi: 'imsi-001010000000001'
-mcc: '001'
-mnc: '01'
-key: '465B5CE8B199B49FAA5F0A2EE238A6BC'
-opc: 'E8ED289DEBA952E4283B54E88E6183CA'
-amf: '8000'
-gnbSearchList:
-  - 127.0.0.1
-sessions:
-  - type: 'IPv4'
-    apn: 'internet'
-    slice:
-      sst: 1
-      sd: 0xffffff
-```
 
 ---
 

@@ -1,0 +1,203 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: open5gs-config
+  namespace: open5gs
+data:
+  nrf.yaml: |
+    logger:
+      level: info
+    nrf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+
+  amf.yaml: |
+    logger:
+      level: info
+    amf:
+      amf_name: open5gs-amf1
+      time:
+        t3512:
+          value: 540
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+            advertise: open5gs-amf.open5gs.svc.cluster.local
+        client:
+          nrf:
+            - uri: http://open5gs-nrf:7777
+      ngap:
+        server:
+          - address: 0.0.0.0
+            port: 38412
+      guami:
+        - plmn_id:
+            mcc: "001"
+            mnc: "01"
+          amf_id:
+            region: 2
+            set: 1
+            pointer: 1
+      tai:
+        - plmn_id:
+            mcc: "001"
+            mnc: "01"
+          tac: 1
+      plmn_support:
+        - plmn_id:
+            mcc: "001"
+            mnc: "01"
+          s_nssai:
+            - sst: 1
+              sd: ffffff
+      security:
+        integrity_order: [ NIA2, NIA1, NIA0 ]
+        ciphering_order: [ NEA0, NEA1, NEA2 ]
+
+  ausf.yaml: |
+    logger:
+      level: info
+    ausf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+            advertise: open5gs-ausf.open5gs.svc.cluster.local
+        client:
+          nrf:
+            - uri: http://open5gs-nrf:7777
+
+  udm.yaml: |
+    logger:
+      level: info
+    udm:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+            advertise: open5gs-udm.open5gs.svc.cluster.local
+        client:
+          nrf:
+            - uri: http://open5gs-nrf:7777
+
+  udr.yaml: |
+    logger:
+      level: info
+    db_uri: mongodb://mongodb:27017/open5gs
+    udr:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+            advertise: open5gs-udr.open5gs.svc.cluster.local
+        client:
+          nrf:
+            - uri: http://open5gs-nrf:7777
+
+  smf.yaml: |
+    logger:
+      level: info
+    smf:
+      # Advertise which slice(s) + DNN this SMF serves to the NRF. Without this
+      # info block the SMF registers with no S-NSSAI/DNN, so the AMF's slice-
+      # aware Nnrf discovery finds "No V-SMF Instance" and falls back to the
+      # (absent) NSSF -> PDU session fails with PAYLOAD_NOT_FORWARDED.
+      info:
+        - s_nssai:
+            - sst: 1
+              sd: ffffff
+              dnn:
+                - internet
+                - ims
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+            advertise: open5gs-smf.open5gs.svc.cluster.local
+        client:
+          nrf:
+            - uri: http://open5gs-nrf:7777
+      gtpu:
+        server:
+          - address: 0.0.0.0
+      pfcp:
+        server:
+          # Bind to the pod interface so the SMF advertises its real pod IP as
+          # the PFCP node_id (not 0.0.0.0). Otherwise the UPF heartbeats to
+          # 0.0.0.0 and the N4 association flaps.
+          - dev: eth0
+            port: 8805
+        client:
+          upf:
+            - address: 172.19.0.2
+              port: 8805
+      session:
+        - subnet: 10.45.0.0/16
+          gateway: 10.45.0.1
+          dnn: internet
+        - subnet: 10.46.0.0/16
+          gateway: 10.46.0.1
+          dnn: ims
+      dns:
+        - 8.8.8.8
+        - 1.1.1.1
+
+  upf.yaml: |
+    logger:
+      level: info
+    upf:
+      pfcp:
+        server:
+          # Bind PFCP (N4) to the node IP, not 0.0.0.0. With hostNetwork the UPF
+          # shares the node netns; binding 0.0.0.0 advertises a NULL PFCP node_id
+          # and sources replies from loopback (127.0.0.1), so the SMF can never
+          # keep the association up. An explicit node IP fixes node_id + source.
+          - address: 172.19.0.2
+            port: 8805
+      gtpu:
+        server:
+          # Advertise 172.19.0.2 as the N3/GTP-U endpoint — the address the host
+          # UERANSIM gNB reaches over the kind bridge.
+          - address: 172.19.0.2
+            port: 2152
+      session:
+        - subnet: 10.45.0.0/16
+          gateway: 10.45.0.1
+          dnn: internet
+        - subnet: 10.46.0.0/16
+          gateway: 10.46.0.1
+          dnn: ims
+
+  pcf.yaml: |
+    logger:
+      level: info
+    db_uri: mongodb://mongodb:27017/open5gs
+    pcf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+            advertise: open5gs-pcf.open5gs.svc.cluster.local
+        client:
+          nrf:
+            - uri: http://open5gs-nrf:7777
+
+  bsf.yaml: |
+    logger:
+      level: info
+    db_uri: mongodb://mongodb:27017/open5gs
+    bsf:
+      # The PCF discovers the BSF (nbsf-management) during SM policy setup to
+      # bind the UE PDU session to a PCF. Without a BSF the PCF segfaults
+      # (exit 139) on "No [nbsf-management:PCF]" and the PDU session hangs.
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+            advertise: open5gs-bsf.open5gs.svc.cluster.local
+        client:
+          nrf:
+            - uri: http://open5gs-nrf:7777

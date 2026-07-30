@@ -1,0 +1,20 @@
+logger:
+  file:
+    path: /usr/local/var/log/open5gs/upf.log
+  level: info
+
+upf:
+  pfcp:
+    server:
+      - address: 0.0.0.0
+        advertise: 172.20.0.30
+  gtpu:
+    server:
+      - address: 0.0.0.0
+  session:
+    - subnet: 10.45.0.0/16
+      gateway: 10.45.0.1
+      dnn: internet
+    - subnet: 10.46.0.0/16
+      gateway: 10.46.0.1
+      dnn: ims

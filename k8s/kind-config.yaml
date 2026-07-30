@@ -1,0 +1,27 @@
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: open5gs-cluster
+nodes:
+- role: control-plane
+  extraMounts:
+  - hostPath: /dev/net/tun
+    containerPath: /dev/net/tun
+  extraPortMappings:
+  - containerPort: 38412
+    hostPort: 38412
+    protocol: SCTP
+  # NOTE: 2152/udp (GTP-U) is intentionally NOT mapped to the host.
+  # The UPF runs with hostNetwork: true, so it binds 2152 directly on the
+  # node IP (172.19.0.2), reachable from the host over the kind bridge.
+  # Mapping it here would make docker-proxy hold host 0.0.0.0:2152 and block
+  # a local UERANSIM gNB from binding GTP-U. Reach the UPF at 172.19.0.2:2152.
+  - containerPort: 8805
+    hostPort: 8805
+    listenAddress: "0.0.0.0"
+    protocol: UDP
+  kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    apiServer:
+      extraArgs:
+        service-node-port-range: "2000-40000"
