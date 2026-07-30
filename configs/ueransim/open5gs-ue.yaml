@@ -5,8 +5,8 @@
 supi: 'imsi-001010000000001'
 
 # Home PLMN
-mcc: '001'
-mnc: '01'
+mcc: '602'
+mnc: '03'
 
 # SUCI Protection (0 = Null scheme — no encryption of SUPI)
 protectionScheme: 0
