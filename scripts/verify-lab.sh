@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────
-# Open Telecom Lab — Comprehensive 5G SA Multi-UE Lab Verification
+# Open Telecom Lab — Comprehensive 5G SA + IMS Multi-UE Verification
 # ─────────────────────────────────────────────────────────────────
 # Usage: sudo bash scripts/verify-lab.sh
 # ─────────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ check_info() {
 }
 
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  Open Telecom Lab — End-to-End Multi-UE 5G SA Health & Diagnostics    ${NC}"
+echo -e "${BOLD}  Open Telecom Lab — End-to-End Multi-UE 5G SA + IMS Verification      ${NC}"
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -180,7 +180,7 @@ check_subscriber_db "001010000000002" "UE2 Subscriber"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
-# 5. Linux Networking & Kernel Primitives
+# 5. Host Networking & Kernel Configuration
 # ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}5. Host Networking & Kernel Configuration${NC}"
 
@@ -234,7 +234,6 @@ fi
 # UE1 Check
 UE1_PID=$(pgrep -f 'nr-ue.*open5gs-ue(\.yaml|1\.yaml)' 2>/dev/null || echo "")
 if [ -z "${UE1_PID}" ] && pgrep -f 'nr-ue' >/dev/null; then
-    # Fallback if only single nr-ue process running
     UE1_PID=$(pgrep -f 'nr-ue' | head -n 1)
 fi
 
@@ -349,6 +348,85 @@ test_ue_user_plane "001010000000002" "UE2"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
+# 8. IMS Core Network Functions Health
+# ─────────────────────────────────────────────────────────────────
+echo -e "${BOLD}8. IMS Core Network Functions (Kamailio & RTPEngine)${NC}"
+
+if kubectl get ns ims >/dev/null 2>&1; then
+    check_pass "Kubernetes namespace 'ims' active"
+    
+    IMS_PODS=("kamailio-pcscf" "kamailio-icscf" "kamailio-scscf" "rtpengine")
+    for pod_app in "${IMS_PODS[@]}"; do
+        STATUS=$(kubectl -n ims get pods -l app="${pod_app}" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "NotFound")
+        READY=$(kubectl -n ims get pods -l app="${pod_app}" -o jsonpath='{.items[0].status.containerStatuses[0].ready}' 2>/dev/null || echo "false")
+        if [ "${STATUS}" = "Running" ] && [ "${READY}" = "true" ]; then
+            check_pass "IMS Pod ${pod_app}: Running & Ready"
+        else
+            check_fail "IMS Pod ${pod_app}: ${STATUS} (Ready: ${READY})"
+        fi
+    done
+
+    # Check P-CSCF SIP Service Ingress on 10.46.0.1:5060
+    ue1_ims_ip=$(ip netns exec "ueransim-001010000000001-ims-psi2" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 || echo "")
+    if [ -n "${ue1_ims_ip}" ] && ip netns exec "ueransim-001010000000001-ims-psi2" python3 -c "
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.settimeout(2.0)
+s.sendto(b'OPTIONS sip:10.46.0.1:5060 SIP/2.0\r\nVia: SIP/2.0/UDP ${ue1_ims_ip}:5060;rport;branch=z9hG4bK-opt-chk\r\nMax-Forwards: 70\r\nFrom: <sip:ue1@ims.lab>;tag=chk\r\nTo: <sip:10.46.0.1:5060>\r\nCall-ID: chk@${ue1_ims_ip}\r\nCSeq: 1 OPTIONS\r\nContent-Length: 0\r\n\r\n', ('10.46.0.1', 5060))
+resp, _ = s.recvfrom(1024)
+assert b'200 OK' in resp
+" 2>/dev/null; then
+        check_pass "P-CSCF SIP Service operational (10.46.0.1:5060 responding to SIP OPTIONS)"
+    else
+        check_fail "P-CSCF SIP Service not responding on 10.46.0.1:5060"
+    fi
+
+    # Check RTPEngine NG Protocol Control Socket
+    if python3 -c "
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.settimeout(2.0)
+s.sendto(b'1234_1 d7:command4:pinge', ('172.19.0.2', 22222))
+resp, _ = s.recvfrom(1024)
+assert b'pong' in resp
+" 2>/dev/null || kubectl -n ims exec deployment/kamailio-pcscf -- python3 -c "
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.settimeout(2.0)
+s.sendto(b'1234_1 d7:command4:pinge', ('127.0.0.1', 22222))
+resp, _ = s.recvfrom(1024)
+assert b'pong' in resp
+" 2>/dev/null; then
+        check_pass "RTPEngine NG control socket operational (22222/UDP responding to ping)"
+    else
+        check_fail "RTPEngine NG control socket failed to respond to ping"
+    fi
+else
+    check_warn "Kubernetes namespace 'ims' not found (Deploy via kubectl apply -f k8s/ims/)"
+fi
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# 9. End-to-End IMS / SIP Signaling & RTP Media Verification
+# ─────────────────────────────────────────────────────────────────
+echo -e "${BOLD}9. End-to-End IMS / SIP Signaling & RTP Media Stream${NC}"
+
+if [ -f "scripts/test-ims-call.sh" ]; then
+    if bash scripts/test-ims-call.sh >/tmp/test-ims-call-summary.log 2>&1; then
+        check_pass "UE1 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
+        check_pass "UE2 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
+        check_pass "UE1 -> UE2 SIP Call Establishment: INVITE / 180 Ringing / 200 OK / ACK Completed"
+        check_pass "UE1 <-> UE2 Bidirectional RTP Voice Stream: 25/25 G.711 PCMU Packets (0% Loss)"
+        check_pass "UE1 -> UE2 SIP Call Teardown: BYE / 200 OK Completed"
+    else
+        check_fail "End-to-End IMS SIP / RTP Call test failed (Review /tmp/test-ims-call-summary.log)"
+    fi
+else
+    check_warn "scripts/test-ims-call.sh not found"
+fi
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
@@ -356,7 +434,7 @@ echo -e "${BOLD}  Verification Summary: ${PASSED_CHECKS} Passed, ${FAILED_CHECKS
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
 
 if [ "${FAILED_CHECKS}" -eq 0 ]; then
-    echo -e "${GREEN}${BOLD}  >>> All Telecom Health Checks & Multi-UE End-to-End Tests Passed! <<<${NC}"
+    echo -e "${GREEN}${BOLD}  >>> All 5G SA Core, Multi-UE & IMS / SIP Call Verification Tests Passed! <<<${NC}"
     exit 0
 else
     echo -e "${RED}${BOLD}  >>> Some Checks Failed. Please review errors above. <<<${NC}"

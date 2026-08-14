@@ -1,0 +1,361 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ims-config
+  namespace: ims
+data:
+  init-db.py: |
+    import os, sqlite3
+    os.makedirs("/etc/kamailio/db", exist_ok=True)
+    db_path = "/etc/kamailio/db/kamailio.sqlite"
+    con = sqlite3.connect(db_path)
+    cur = con.cursor()
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS subscriber (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username VARCHAR(64) DEFAULT '' NOT NULL,
+        domain VARCHAR(64) DEFAULT '' NOT NULL,
+        password VARCHAR(64) DEFAULT '' NOT NULL,
+        email_address VARCHAR(64) DEFAULT '' NOT NULL,
+        ha1 VARCHAR(128) DEFAULT '' NOT NULL,
+        ha1b VARCHAR(128) DEFAULT '' NOT NULL,
+        rpid VARCHAR(128) DEFAULT NULL,
+        CONSTRAINT account_idx UNIQUE (username, domain)
+    )''')
+    subscribers = [
+        ("ue1", "ims.lab", "password123"),
+        ("001010000000001", "ims.lab", "password123"),
+        ("ue2", "ims.lab", "password123"),
+        ("001010000000002", "ims.lab", "password123"),
+        ("ue1", "10.46.0.1", "password123"),
+        ("ue2", "10.46.0.1", "password123")
+    ]
+    for u, d, p in subscribers:
+        cur.execute("INSERT OR REPLACE INTO subscriber (username, domain, password) VALUES (?, ?, ?)", (u, d, p))
+    con.commit()
+    con.close()
+    print("[✓] SQLite subscriber database initialized at", db_path)
+
+  pcscf.cfg: |
+    #!KAMAILIO
+    debug=2
+    log_stderror=yes
+    auto_aliases=no
+    listen=udp:10.46.0.1:5060 advertise 10.46.0.1:5060
+    listen=udp:172.19.0.2:5060 advertise 172.19.0.2:5060
+
+    alias="ims.lab"
+    alias="10.46.0.1"
+    alias="172.19.0.2"
+    alias="kamailio-pcscf"
+    alias="kamailio-pcscf.ims.svc.cluster.local"
+
+    # Module Loading Order: tm before sl/rr/etc.
+    loadmodule "tm.so"
+    loadmodule "sl.so"
+    loadmodule "rr.so"
+    loadmodule "pv.so"
+    loadmodule "maxfwd.so"
+    loadmodule "textops.so"
+    loadmodule "siputils.so"
+    loadmodule "xlog.so"
+    loadmodule "sanity.so"
+    loadmodule "path.so"
+    loadmodule "rtpengine.so"
+    loadmodule "ctl.so"
+    loadmodule "jsonrpcs.so"
+
+    modparam("rr", "enable_full_lr", 1)
+    modparam("rr", "append_fromtag", 1)
+    modparam("rtpengine", "rtpengine_sock", "udp:127.0.0.1:22222")
+
+    request_route {
+        force_rport();
+
+        if (!mf_process_maxfwd_header("10")) {
+            sl_send_reply("483","Too Many Hops");
+            exit;
+        }
+
+        if (!sanity_check()) {
+            xlog("L_WARN", "P-CSCF: Malformed request from $si:$sp\n");
+            exit;
+        }
+
+        if (is_method("OPTIONS")) {
+            sl_send_reply("200", "OK");
+            exit;
+        }
+
+        # Handle in-dialog requests
+        if (has_totag()) {
+            if (loose_route()) {
+                if (is_method("BYE")) {
+                    xlog("L_INFO", "P-CSCF: Processing BYE dialog teardown, deleting RTPEngine session\n");
+                    rtpengine_delete();
+                }
+                t_relay();
+                exit;
+            }
+            if (is_method("ACK")) {
+                if (t_check_trans()) {
+                    t_relay();
+                    exit;
+                }
+                exit;
+            }
+            sl_send_reply("404", "Not Found");
+            exit;
+        }
+
+        # Initial REGISTER
+        if (is_method("REGISTER")) {
+            xlog("L_INFO", "P-CSCF: Relaying REGISTER for $fu (Contact: $ct) to I-CSCF\n");
+            add_path_received();
+            $du = "sip:kamailio-icscf.ims.svc.cluster.local:5060";
+            t_relay();
+            exit;
+        }
+
+        # Initial INVITE
+        if (is_method("INVITE")) {
+            xlog("L_INFO", "P-CSCF: Relaying initial INVITE from $fu to $ru (Source: $si)\n");
+            record_route_preset("10.46.0.1:5060;nat=yes");
+            if ($si =~ "^10\.46\.") {
+                # Originating leg from UE -> S-CSCF
+                if (has_body("application/sdp")) {
+                    xlog("L_INFO", "P-CSCF: Offering SDP with RTPEngine for originating INVITE\n");
+                    rtpengine_offer("replace-origin replace-session-connection ICE=remove");
+                }
+                t_on_reply("REPLY_HANDLER");
+                $du = "sip:kamailio-scscf.ims.svc.cluster.local:5060";
+            } else {
+                # Terminating leg from S-CSCF -> UE
+                if (has_body("application/sdp")) {
+                    xlog("L_INFO", "P-CSCF: Offering SDP with RTPEngine for terminating INVITE\n");
+                    rtpengine_offer("replace-origin replace-session-connection ICE=remove");
+                }
+                t_on_reply("REPLY_HANDLER");
+            }
+            t_relay();
+            exit;
+        }
+
+        if (is_method("CANCEL")) {
+            rtpengine_delete();
+            if (t_check_trans()) {
+                t_relay();
+            }
+            exit;
+        }
+
+        # Generic forward for other initial methods
+        record_route_preset("10.46.0.1:5060;nat=yes");
+        if ($si =~ "^10\.46\.") {
+            $du = "sip:kamailio-scscf.ims.svc.cluster.local:5060";
+        }
+        t_relay();
+    }
+
+    onreply_route[REPLY_HANDLER] {
+        xlog("L_INFO", "P-CSCF: Handling SIP reply $rs $rr (From: $fu, To: $tu)\n");
+        if (status =~ "^(180|183|200)$" && has_body("application/sdp")) {
+            xlog("L_INFO", "P-CSCF: Answering SDP with RTPEngine on $rs reply\n");
+            rtpengine_answer("replace-origin replace-session-connection ICE=remove");
+        }
+    }
+
+  icscf.cfg: |
+    #!KAMAILIO
+    debug=2
+    log_stderror=yes
+    auto_aliases=no
+    listen=udp:0.0.0.0:5060 advertise kamailio-icscf.ims.svc.cluster.local:5060
+
+    alias="ims.lab"
+    alias="kamailio-icscf"
+    alias="kamailio-icscf.ims.svc.cluster.local"
+
+    # Module Loading Order: tm before sl/rr
+    loadmodule "tm.so"
+    loadmodule "sl.so"
+    loadmodule "rr.so"
+    loadmodule "pv.so"
+    loadmodule "maxfwd.so"
+    loadmodule "textops.so"
+    loadmodule "siputils.so"
+    loadmodule "xlog.so"
+    loadmodule "sanity.so"
+    loadmodule "ctl.so"
+    loadmodule "jsonrpcs.so"
+
+    modparam("rr", "enable_full_lr", 1)
+    modparam("rr", "append_fromtag", 1)
+
+    request_route {
+        force_rport();
+
+        if (!mf_process_maxfwd_header("10")) {
+            sl_send_reply("483","Too Many Hops");
+            exit;
+        }
+
+        if (!sanity_check()) {
+            xlog("L_WARN", "I-CSCF: Malformed request from $si:$sp\n");
+            exit;
+        }
+
+        if (is_method("OPTIONS")) {
+            sl_send_reply("200", "OK");
+            exit;
+        }
+
+        if (has_totag()) {
+            if (loose_route()) {
+                t_relay();
+                exit;
+            }
+            sl_send_reply("404", "Not Found");
+            exit;
+        }
+
+        if (is_method("REGISTER")) {
+            xlog("L_INFO", "I-CSCF: Relaying REGISTER for $fu to S-CSCF\n");
+            $du = "sip:kamailio-scscf.ims.svc.cluster.local:5060";
+            t_relay();
+            exit;
+        }
+
+        if (is_method("INVITE")) {
+            xlog("L_INFO", "I-CSCF: Relaying INVITE from $fu to S-CSCF\n");
+            $du = "sip:kamailio-scscf.ims.svc.cluster.local:5060";
+            t_relay();
+            exit;
+        }
+
+        $du = "sip:kamailio-scscf.ims.svc.cluster.local:5060";
+        t_relay();
+    }
+
+  scscf.cfg: |
+    #!KAMAILIO
+    debug=2
+    log_stderror=yes
+    auto_aliases=no
+    listen=udp:0.0.0.0:5060 advertise kamailio-scscf.ims.svc.cluster.local:5060
+
+    alias="ims.lab"
+    alias="kamailio-scscf"
+    alias="kamailio-scscf.ims.svc.cluster.local"
+
+    # Module Loading Order: tm before sl/rr/path
+    loadmodule "tm.so"
+    loadmodule "sl.so"
+    loadmodule "rr.so"
+    loadmodule "pv.so"
+    loadmodule "maxfwd.so"
+    loadmodule "textops.so"
+    loadmodule "siputils.so"
+    loadmodule "xlog.so"
+    loadmodule "sanity.so"
+    loadmodule "path.so"
+    loadmodule "usrloc.so"
+    loadmodule "registrar.so"
+    loadmodule "auth.so"
+    loadmodule "auth_db.so"
+    loadmodule "db_sqlite.so"
+    loadmodule "ctl.so"
+    loadmodule "jsonrpcs.so"
+
+    modparam("rr", "enable_full_lr", 1)
+    modparam("rr", "append_fromtag", 1)
+    modparam("usrloc", "db_mode", 0)
+    modparam("usrloc", "cseq_delay", 0)
+    modparam("auth_db", "db_url", "sqlite:///etc/kamailio/db/kamailio.sqlite")
+    modparam("auth_db", "calculate_ha1", 1)
+    modparam("auth_db", "password_column", "password")
+    modparam("auth_db", "user_column", "username")
+    modparam("auth_db", "domain_column", "domain")
+
+    request_route {
+        force_rport();
+
+        if (!mf_process_maxfwd_header("10")) {
+            sl_send_reply("483","Too Many Hops");
+            exit;
+        }
+
+        if (!sanity_check()) {
+            xlog("L_WARN", "S-CSCF: Malformed request from $si:$sp\n");
+            exit;
+        }
+
+        if (is_method("OPTIONS")) {
+            sl_send_reply("200", "OK");
+            exit;
+        }
+
+        # In-dialog requests
+        if (has_totag()) {
+            if (loose_route()) {
+                record_route_preset("kamailio-scscf.ims.svc.cluster.local:5060");
+                t_relay();
+                exit;
+            }
+            if (is_method("ACK")) {
+                if (t_check_trans()) {
+                    t_relay();
+                    exit;
+                }
+                exit;
+            }
+            sl_send_reply("404", "Not Found");
+            exit;
+        }
+
+        # Registration Handling with Authentication
+        if (is_method("REGISTER")) {
+            xlog("L_INFO", "S-CSCF: Processing REGISTER for $fu (User: $fU, Domain: $fd)\n");
+            if (!auth_check("$fd", "subscriber", "1")) {
+                xlog("L_INFO", "S-CSCF: Challenging REGISTER from $fu\n");
+                auth_challenge("$fd", "0");
+                exit;
+            }
+            xlog("L_INFO", "S-CSCF: Registration authenticated for $fu, saving location...\n");
+            save("location");
+            exit;
+        }
+
+        if (is_method("CANCEL")) {
+            if (t_check_trans()) {
+                t_relay();
+            }
+            exit;
+        }
+
+        # Initial INVITE handling
+        if (is_method("INVITE")) {
+            xlog("L_INFO", "S-CSCF: Processing INVITE from $fu to $ru (Target User: $rU)\n");
+            record_route_preset("kamailio-scscf.ims.svc.cluster.local:5060");
+            
+            # Lookup terminating subscriber location
+            if (!lookup("location")) {
+                xlog("L_WARN", "S-CSCF: Target subscriber $rU not registered in location DB\n");
+                sl_send_reply("404", "User Not Found / Not Registered");
+                exit;
+            }
+
+            xlog("L_INFO", "S-CSCF: Destination found: $du (RU: $ru). Relaying INVITE...\n");
+            t_relay();
+            exit;
+        }
+
+        # Other initial requests (MESSAGE, INFO, etc.)
+        if (lookup("location")) {
+            record_route_preset("kamailio-scscf.ims.svc.cluster.local:5060");
+            t_relay();
+            exit;
+        }
+
+        sl_send_reply("404", "Not Found");
+    }

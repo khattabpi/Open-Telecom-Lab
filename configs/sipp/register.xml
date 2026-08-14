@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!DOCTYPE scenario SYSTEM "sipp.dtd">
+
+<scenario name="IMS SIP Registration with Digest Auth">
+  <!-- Step 1: Initial REGISTER without auth -->
+  <send retrans="500">
+    <![CDATA[
+
+      REGISTER sip:[service] SIP/2.0
+      Via: SIP/2.0/[transport] [local_ip]:[local_port];rport;branch=[branch]
+      Max-Forwards: 70
+      From: <sip:[field0]@[service]>;tag=[pid]SIPpTag00[call_number]
+      To: <sip:[field0]@[service]>
+      Call-ID: [call_id]
+      CSeq: [cseq] REGISTER
+      Contact: <sip:[field0]@[local_ip]:[local_port]>
+      Expires: 3600
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- Step 2: Expect 401 Unauthorized with Digest challenge -->
+  <recv response="401" auth="true">
+  </recv>
+
+  <!-- Step 3: Send authenticated REGISTER with challenge response -->
+  <send retrans="500">
+    <![CDATA[
+
+      REGISTER sip:[service] SIP/2.0
+      Via: SIP/2.0/[transport] [local_ip]:[local_port];rport;branch=[branch]
+      Max-Forwards: 70
+      From: <sip:[field0]@[service]>;tag=[pid]SIPpTag00[call_number]
+      To: <sip:[field0]@[service]>
+      Call-ID: [call_id]
+      CSeq: [cseq] REGISTER
+      Contact: <sip:[field0]@[local_ip]:[local_port]>
+      [authentication username=[field0] password=[field1]]
+      Expires: 3600
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- Step 4: Expect 200 OK -->
+  <recv response="200" rtd="true">
+  </recv>
+
+  <!-- Response time limit in ms -->
+  <ResponseTimeRepartition value="10, 20, 30, 40, 50, 100, 150, 200"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000, 5000, 10000"/>
+</scenario>

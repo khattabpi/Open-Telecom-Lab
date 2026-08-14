@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kamailio-scscf
+  namespace: ims
+  labels:
+    app: kamailio-scscf
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: kamailio-scscf
+  template:
+    metadata:
+      labels:
+        app: kamailio-scscf
+    spec:
+      initContainers:
+        - name: init-db
+          image: ims-node:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - python3
+            - /etc/kamailio/config/init-db.py
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/kamailio/config
+            - name: db-volume
+              mountPath: /etc/kamailio/db
+      containers:
+        - name: scscf
+          image: ims-node:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - kamailio
+            - -DD
+            - -E
+            - -f
+            - /etc/kamailio/config/scscf.cfg
+          ports:
+            - name: sip-udp
+              containerPort: 5060
+              protocol: UDP
+            - name: sip-tcp
+              containerPort: 5060
+              protocol: TCP
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/kamailio/config
+            - name: db-volume
+              mountPath: /etc/kamailio/db
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: config-volume
+          configMap:
+            name: ims-config
+        - name: db-volume
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kamailio-scscf
+  namespace: ims
+  labels:
+    app: kamailio-scscf
+spec:
+  type: ClusterIP
+  selector:
+    app: kamailio-scscf
+  ports:
+    - name: sip-udp
+      port: 5060
+      targetPort: 5060
+      protocol: UDP
+    - name: sip-tcp
+      port: 5060
+      targetPort: 5060
+      protocol: TCP

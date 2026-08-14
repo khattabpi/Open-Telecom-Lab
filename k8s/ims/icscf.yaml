@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kamailio-icscf
+  namespace: ims
+  labels:
+    app: kamailio-icscf
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: kamailio-icscf
+  template:
+    metadata:
+      labels:
+        app: kamailio-icscf
+    spec:
+      containers:
+        - name: icscf
+          image: ims-node:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - kamailio
+            - -DD
+            - -E
+            - -f
+            - /etc/kamailio/config/icscf.cfg
+          ports:
+            - name: sip-udp
+              containerPort: 5060
+              protocol: UDP
+            - name: sip-tcp
+              containerPort: 5060
+              protocol: TCP
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/kamailio/config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: config-volume
+          configMap:
+            name: ims-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kamailio-icscf
+  namespace: ims
+  labels:
+    app: kamailio-icscf
+spec:
+  type: ClusterIP
+  selector:
+    app: kamailio-icscf
+  ports:
+    - name: sip-udp
+      port: 5060
+      targetPort: 5060
+      protocol: UDP
+    - name: sip-tcp
+      port: 5060
+      targetPort: 5060
+      protocol: TCP

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rtpengine
+  namespace: ims
+  labels:
+    app: rtpengine
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: rtpengine
+  template:
+    metadata:
+      labels:
+        app: rtpengine
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: rtpengine
+          image: ims-node:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "[+] Starting RTPEngine on IMS Gateway 10.46.0.1..."
+              exec rtpengine -f -L 6 -E -i 10.46.0.1 -n 0.0.0.0:22222 --port-min 20000 --port-max 20100
+          ports:
+            - name: control
+              containerPort: 22222
+              protocol: UDP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rtpengine
+  namespace: ims
+  labels:
+    app: rtpengine
+spec:
+  type: ClusterIP
+  selector:
+    app: rtpengine
+  ports:
+    - name: control
+      port: 22222
+      targetPort: 22222
+      protocol: UDP
