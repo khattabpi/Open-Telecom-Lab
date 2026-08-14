@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────
-# Open Telecom Lab — Comprehensive 5G SA Lab Verification
+# Open Telecom Lab — Comprehensive 5G SA Multi-UE Lab Verification
 # ─────────────────────────────────────────────────────────────────
 # Usage: sudo bash scripts/verify-lab.sh
 # ─────────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ check_info() {
 }
 
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  Open Telecom Lab — End-to-End 5G SA Health Check & Diagnostics       ${NC}"
+echo -e "${BOLD}  Open Telecom Lab — End-to-End Multi-UE 5G SA Health & Diagnostics    ${NC}"
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -153,25 +153,30 @@ echo ""
 # ─────────────────────────────────────────────────────────────────
 # 4. Subscriber Provisioning (MongoDB)
 # ─────────────────────────────────────────────────────────────────
-echo -e "${BOLD}4. Subscriber Provisioning${NC}"
-SUB_FOUND=false
-if [ "${K8S_ACTIVE}" = true ]; then
-    COUNT=$(kubectl -n open5gs exec mongodb-0 -- mongosh --quiet --eval 'db.getSiblingDB("open5gs").subscribers.countDocuments({imsi:"001010000000001"})' 2>/dev/null || echo "0")
-    if [ "${COUNT}" -ge 1 ]; then
-        check_pass "Test subscriber IMSI 001010000000001 provisioned in MongoDB"
-        SUB_FOUND=true
-    else
-        check_fail "Test subscriber IMSI 001010000000001 missing in MongoDB (Run bash scripts/add-subscriber.sh)"
+echo -e "${BOLD}4. Subscriber Provisioning (MongoDB)${NC}"
+
+check_subscriber_db() {
+    local imsi="$1"
+    local label="$2"
+    local count=0
+
+    if [ "${K8S_ACTIVE}" = true ]; then
+        count=$(kubectl -n open5gs exec mongodb-0 -- mongosh --quiet --eval "db.getSiblingDB('open5gs').subscribers.countDocuments({imsi:'${imsi}'})" 2>/dev/null || echo "0")
+    elif command -v mongosh &>/dev/null; then
+        count=$(mongosh --quiet --eval "db.getSiblingDB('open5gs').subscribers.countDocuments({imsi:'${imsi}'})" 2>/dev/null || echo "0")
+    elif [ "${DOCKER_ACTIVE}" = true ]; then
+        count=$(docker exec mongodb mongosh --quiet --eval "db.getSiblingDB('open5gs').subscribers.countDocuments({imsi:'${imsi}'})" 2>/dev/null || echo "0")
     fi
-elif command -v mongosh &>/dev/null; then
-    COUNT=$(mongosh --quiet --eval 'db.getSiblingDB("open5gs").subscribers.countDocuments({imsi:"001010000000001"})' 2>/dev/null || echo "0")
-    if [ "${COUNT}" -ge 1 ]; then
-        check_pass "Test subscriber IMSI 001010000000001 provisioned in MongoDB"
-        SUB_FOUND=true
+
+    if [ "${count}" -ge 1 ]; then
+        check_pass "${label} (IMSI: ${imsi}) provisioned in MongoDB"
     else
-        check_fail "Test subscriber IMSI 001010000000001 missing in MongoDB"
+        check_fail "${label} (IMSI: ${imsi}) missing in MongoDB (Run bash scripts/add-subscriber.sh)"
     fi
-fi
+}
+
+check_subscriber_db "001010000000001" "UE1 Subscriber"
+check_subscriber_db "001010000000002" "UE2 Subscriber"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
@@ -211,10 +216,11 @@ fi
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
-# 6. RAN Simulation (UERANSIM gNodeB & UE)
+# 6. RAN Simulation Status (UERANSIM gNodeB & UEs)
 # ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}6. UERANSIM Simulation Status${NC}"
 
+# gNodeB Check
 GNB_PID=$(pgrep -f 'nr-gnb' 2>/dev/null || echo "")
 if [ -n "${GNB_PID}" ]; then
     check_pass "UERANSIM gNodeB running (PID: ${GNB_PID})"
@@ -225,92 +231,132 @@ else
     check_warn "UERANSIM gNodeB is not currently running (Start via bash scripts/run-gnb.sh)"
 fi
 
-UE_PID=$(pgrep -f 'nr-ue' 2>/dev/null || echo "")
-if [ -n "${UE_PID}" ]; then
-    check_pass "UERANSIM UE running (PID: ${UE_PID})"
-    if [ -f "/tmp/ueransim-ue.log" ]; then
-        if grep -qi "Initial Registration is successful\|Registration accept" /tmp/ueransim-ue.log; then
-            check_pass "5G-AKA NAS Registration: MM-REGISTERED / Success"
+# UE1 Check
+UE1_PID=$(pgrep -f 'nr-ue.*open5gs-ue(\.yaml|1\.yaml)' 2>/dev/null || echo "")
+if [ -z "${UE1_PID}" ] && pgrep -f 'nr-ue' >/dev/null; then
+    # Fallback if only single nr-ue process running
+    UE1_PID=$(pgrep -f 'nr-ue' | head -n 1)
+fi
+
+if [ -n "${UE1_PID}" ]; then
+    check_pass "UERANSIM UE1 running (PID: ${UE1_PID})"
+    UE1_LOG="/tmp/ueransim-ue1.log"
+    [ ! -f "${UE1_LOG}" ] && UE1_LOG="/tmp/ueransim-ue.log"
+    if [ -f "${UE1_LOG}" ]; then
+        if grep -qi "Initial Registration is successful\|Registration accept" "${UE1_LOG}"; then
+            check_pass "UE1 5G-AKA NAS Registration: MM-REGISTERED / Success"
         fi
-        if grep -qi "PDU Session establishment is successful" /tmp/ueransim-ue.log; then
-            check_pass "Dual PDU Session Establishment: Active (internet + ims)"
+        if grep -qi "PDU Session establishment is successful" "${UE1_LOG}"; then
+            check_pass "UE1 Dual PDU Session Establishment: Active (internet + ims)"
         fi
     fi
 else
-    check_warn "UERANSIM UE is not currently running (Start via sudo bash scripts/run-ue.sh)"
+    check_warn "UERANSIM UE1 is not running (Start via sudo bash scripts/run-ue.sh 1)"
+fi
+
+# UE2 Check
+UE2_PID=$(pgrep -f 'nr-ue.*open5gs-ue2\.yaml' 2>/dev/null || echo "")
+if [ -n "${UE2_PID}" ]; then
+    check_pass "UERANSIM UE2 running (PID: ${UE2_PID})"
+    UE2_LOG="/tmp/ueransim-ue2.log"
+    if [ -f "${UE2_LOG}" ]; then
+        if grep -qi "Initial Registration is successful\|Registration accept" "${UE2_LOG}"; then
+            check_pass "UE2 5G-AKA NAS Registration: MM-REGISTERED / Success"
+        fi
+        if grep -qi "PDU Session establishment is successful" "${UE2_LOG}"; then
+            check_pass "UE2 Dual PDU Session Establishment: Active (internet + ims)"
+        fi
+    fi
+else
+    check_warn "UERANSIM UE2 is not running (Start via sudo bash scripts/run-ue.sh 2)"
 fi
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
-# 7. User Plane Interfaces & Traffic Validation
+# 7. Multi-UE User Plane Connectivity & Protocol Paths
 # ─────────────────────────────────────────────────────────────────
-echo -e "${BOLD}7. End-to-End User Plane Connectivity${NC}"
+echo -e "${BOLD}7. End-to-End Multi-UE User Plane Connectivity${NC}"
 
-# Find UE network namespace(s) or interfaces
-NETNS_LIST=$(ip netns list 2>/dev/null | awk '{print $1}' || echo "")
-INTERNET_NS=""
-IMS_NS=""
+test_ue_user_plane() {
+    local imsi="$1"
+    local label="$2"
+    
+    local internet_ns="ueransim-${imsi}-internet-psi1"
+    local ims_ns="ueransim-${imsi}-ims-psi2"
 
-for ns in ${NETNS_LIST}; do
-    if [[ "${ns}" =~ internet|psi1 ]]; then
-        INTERNET_NS="${ns}"
-    elif [[ "${ns}" =~ ims|psi2 ]]; then
-        IMS_NS="${ns}"
-    fi
-done
+    echo -e "${CYAN}--- ${label} (IMSI: ${imsi}) ---${NC}"
 
-# Internet PDU session test
-if [ -n "${INTERNET_NS}" ]; then
-    check_pass "UE Internet Network Namespace active: ${INTERNET_NS}"
-    UE_IP=$(ip netns exec "${INTERNET_NS}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' || echo "")
-    if [ -n "${UE_IP}" ]; then
-        check_pass "UE Internet IP allocated: ${UE_IP}"
-        # Ping test to UPF gateway
-        if ip netns exec "${INTERNET_NS}" ping -c 2 -W 2 10.45.0.1 &>/dev/null; then
-            check_pass "User Plane GTP-U: Ping to UPF Gateway (10.45.0.1) succeeded (0% loss)"
+    # Internet PDU Session Test
+    if ip netns list 2>/dev/null | grep -qw "${internet_ns}"; then
+        check_pass "${label} Internet Network Namespace active: ${internet_ns}"
+        local ue_ip
+        ue_ip=$(ip netns exec "${internet_ns}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' || echo "")
+        if [ -n "${ue_ip}" ]; then
+            check_pass "${label} Internet IP allocated: ${ue_ip}"
+            
+            # Ping UPF Gateway (10.45.0.1)
+            if ip netns exec "${internet_ns}" ping -c 3 -W 2 10.45.0.1 &>/dev/null; then
+                check_pass "${label} User Plane GTP-U: Ping to UPF Gateway (10.45.0.1) succeeded (0% loss)"
+            else
+                check_fail "${label} User Plane GTP-U: Ping to UPF Gateway (10.45.0.1) failed"
+            fi
+            
+            # Ping 8.8.8.8
+            if ip netns exec "${internet_ns}" ping -c 3 -W 2 8.8.8.8 &>/dev/null; then
+                check_pass "${label} End-to-End Internet Data Path: Ping 8.8.8.8 succeeded (0% loss)"
+            else
+                check_warn "${label} Ping 8.8.8.8 from namespace timed out (check host NAT MASQUERADE)"
+            fi
+
+            # HTTPS Curl
+            if ip netns exec "${internet_ns}" curl -sI --max-time 10 https://www.google.com 2>/dev/null | grep -qi "HTTP/[123]"; then
+                check_pass "${label} HTTPS Data Path: curl https://www.google.com succeeded"
+            else
+                check_fail "${label} HTTPS Data Path: curl https://www.google.com failed"
+            fi
         else
-            check_fail "User Plane GTP-U: Ping to UPF Gateway (10.45.0.1) failed"
+            check_fail "${label} uesimtun0 interface missing IPv4 address in ${internet_ns}"
         fi
-        # Ping test to 8.8.8.8
-        if ip netns exec "${INTERNET_NS}" ping -c 2 -W 2 8.8.8.8 &>/dev/null; then
-            check_pass "End-to-End Internet Data Path: Ping 8.8.8.8 through uesimtun0 succeeded (0% packet loss)"
-        else
-            check_warn "Ping 8.8.8.8 from UE namespace timed out (check host NAT MASQUERADE)"
-        fi
+    else
+        check_fail "${label} Internet Network Namespace '${internet_ns}' not found"
     fi
-elif ip link show uesimtun0 &>/dev/null; then
-    check_pass "UE Interface uesimtun0 active on host"
-    UE_IP=$(ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' || echo "")
-    if [ -n "${UE_IP}" ]; then
-        check_pass "UE IP allocated: ${UE_IP}"
-    fi
-else
-    check_info "No active UE TUN interface detected (Run gNB and UE to test user plane)"
-fi
 
-# IMS PDU session test
-if [ -n "${IMS_NS}" ]; then
-    check_pass "UE IMS Network Namespace active: ${IMS_NS}"
-    IMS_IP=$(ip netns exec "${IMS_NS}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' || echo "")
-    if [ -n "${IMS_IP}" ]; then
-        check_pass "UE IMS IP allocated: ${IMS_IP}"
-        if ip netns exec "${IMS_NS}" ping -c 2 -W 2 10.46.0.1 &>/dev/null; then
-            check_pass "IMS Bearer Path: Ping to IMS Gateway (10.46.0.1) succeeded (0% loss)"
+    # IMS PDU Session Test
+    if ip netns list 2>/dev/null | grep -qw "${ims_ns}"; then
+        check_pass "${label} IMS Network Namespace active: ${ims_ns}"
+        local ims_ip
+        ims_ip=$(ip netns exec "${ims_ns}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' || echo "")
+        if [ -n "${ims_ip}" ]; then
+            check_pass "${label} IMS IP allocated: ${ims_ip}"
+            
+            # Ping IMS Gateway (10.46.0.1)
+            if ip netns exec "${ims_ns}" ping -c 3 -W 2 10.46.0.1 &>/dev/null; then
+                check_pass "${label} IMS Bearer Path: Ping to IMS Gateway (10.46.0.1) succeeded (0% loss)"
+            else
+                check_fail "${label} IMS Bearer Path: Ping to IMS Gateway (10.46.0.1) failed"
+            fi
         else
-            check_fail "IMS Bearer Path: Ping to IMS Gateway (10.46.0.1) failed"
+            check_fail "${label} uesimtun0 interface missing IPv4 address in ${ims_ns}"
         fi
+    else
+        check_fail "${label} IMS Network Namespace '${ims_ns}' not found"
     fi
-elif ip link show uesimtun1 &>/dev/null; then
-    check_pass "UE Interface uesimtun1 (IMS) active"
-fi
+}
 
+test_ue_user_plane "001010000000001" "UE1"
 echo ""
+test_ue_user_plane "001010000000002" "UE2"
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# Summary
+# ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  Verification Summary: ${PASSED_CHECKS} Passed, ${FAILED_CHECKS} Failed, ${WARNING_CHECKS} Warnings${NC}"
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
 
 if [ "${FAILED_CHECKS}" -eq 0 ]; then
-    echo -e "${GREEN}${BOLD}  >>> All Telecom Health Checks & End-to-End Tests Passed! <<<${NC}"
+    echo -e "${GREEN}${BOLD}  >>> All Telecom Health Checks & Multi-UE End-to-End Tests Passed! <<<${NC}"
     exit 0
 else
     echo -e "${RED}${BOLD}  >>> Some Checks Failed. Please review errors above. <<<${NC}"

@@ -131,8 +131,8 @@ wait_for_pods() {
 
 # --- 7. Provision subscriber ------------------------------------------------
 provision_subscriber() {
-  log "Provisioning test subscriber in MongoDB..."
-  bash "${REPO_ROOT}/scripts/add-subscriber.sh"
+  log "Provisioning test subscribers (UE1 & UE2) in MongoDB..."
+  bash "${REPO_ROOT}/scripts/add-subscriber.sh" all
 }
 
 # --- 8. Status --------------------------------------------------------------
