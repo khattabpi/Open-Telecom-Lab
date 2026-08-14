@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# start-lab.sh — bring up the Open5GS-on-kind 5G SA lab for local UERANSIM.
+# start-lab.sh — bring up the Open5GS-on-kind 5G SA lab and Kamailio IMS for local UERANSIM.
 #
 # Steps:
 #   1. Stop any native Open5GS systemd services (avoid port/SCTP conflicts).
 #   2. Configure Linux host kernel settings (ip_forward, rp_filter, iptables).
 #   3. Ensure the kind cluster exists, is running, and pinned to 172.19.0.2.
 #   4. Pre-load container images into kind cluster.
-#   5. Apply Kubernetes manifests (namespace, db, configmap, CP NFs, UPF).
-#   6. Wait for every deployment/statefulset in open5gs namespace to become Ready.
-#   7. Provision the test subscriber into MongoDB.
+#   5. Apply Kubernetes manifests (open5gs 5GC and ims service layer).
+#   6. Wait for deployments/statefulsets in open5gs and ims namespaces to become Ready.
+#   7. Provision the test subscribers into MongoDB.
 #   8. Print status and next steps.
 #
 set -euo pipefail
@@ -23,6 +23,7 @@ NODE_CONTAINER="${CLUSTER_NAME}-control-plane"
 KIND_NETWORK="kind"
 NODE_IP="172.19.0.2"
 NAMESPACE="open5gs"
+IMS_NAMESPACE="ims"
 POD_WAIT_TIMEOUT="180s"
 
 log()  { printf '\033[1;34m[start-lab]\033[0m %s\n' "$*"; }
@@ -106,16 +107,29 @@ preload_images() {
   if docker image inspect gradiant/open5gs:2.8.0 >/dev/null 2>&1; then
     kind load docker-image gradiant/open5gs:2.8.0 --name "${CLUSTER_NAME}" 2>/dev/null || true
   fi
+  if docker image inspect ims-node:latest >/dev/null 2>&1; then
+    kind load docker-image ims-node:latest --name "${CLUSTER_NAME}" 2>/dev/null || true
+  fi
 }
 
 # --- 5. Apply manifests ----------------------------------------------------
 apply_manifests() {
-  log "Applying Kubernetes manifests in ${REPO_ROOT}/k8s/..."
+  log "Applying Open5GS 5GC manifests in ${REPO_ROOT}/k8s/..."
   kubectl apply -f "${REPO_ROOT}/k8s/namespace.yaml"
   kubectl apply -f "${REPO_ROOT}/k8s/mongodb.yaml"
   kubectl apply -f "${REPO_ROOT}/k8s/configmap.yaml"
   kubectl apply -f "${REPO_ROOT}/k8s/control-plane.yaml"
   kubectl apply -f "${REPO_ROOT}/k8s/upf.yaml"
+
+  if [ -d "${REPO_ROOT}/k8s/ims" ]; then
+    log "Applying Kamailio IMS manifests in ${REPO_ROOT}/k8s/ims/..."
+    kubectl apply -f "${REPO_ROOT}/k8s/ims/namespace.yaml"
+    kubectl apply -f "${REPO_ROOT}/k8s/ims/configmap.yaml"
+    kubectl apply -f "${REPO_ROOT}/k8s/ims/rtpengine.yaml"
+    kubectl apply -f "${REPO_ROOT}/k8s/ims/scscf.yaml"
+    kubectl apply -f "${REPO_ROOT}/k8s/ims/icscf.yaml"
+    kubectl apply -f "${REPO_ROOT}/k8s/ims/pcscf.yaml"
+  fi
 }
 
 # --- 6. Wait for pods -------------------------------------------------------
@@ -127,33 +141,50 @@ wait_for_pods() {
     kubectl -n "${NAMESPACE}" rollout status "deployment/${dep}" --timeout="${POD_WAIT_TIMEOUT}"
   done
   pass "All Open5GS control-plane and user-plane deployments are Ready."
+
+  if kubectl get ns "${IMS_NAMESPACE}" >/dev/null 2>&1; then
+    log "Waiting for IMS deployments in namespace '${IMS_NAMESPACE}' to become Ready..."
+    for dep in kamailio-scscf kamailio-icscf kamailio-pcscf rtpengine; do
+      kubectl -n "${IMS_NAMESPACE}" rollout status "deployment/${dep}" --timeout="${POD_WAIT_TIMEOUT}"
+    done
+    pass "All Kamailio IMS deployments are Ready."
+  fi
 }
 
 # --- 7. Provision subscriber ------------------------------------------------
 provision_subscriber() {
-  log "Provisioning test subscriber in MongoDB..."
-  bash "${REPO_ROOT}/scripts/add-subscriber.sh"
+  log "Provisioning test subscribers (UE1 & UE2) in MongoDB..."
+  bash "${REPO_ROOT}/scripts/add-subscriber.sh" all
 }
 
 # --- 8. Status --------------------------------------------------------------
 print_status() {
   echo
   pass "═══════════════════════════════════════════════════════════════"
-  pass "  5G SA Lab is Online and Operational!"
+  pass "  5G SA Core & IMS Lab is Online and Operational!"
   pass "═══════════════════════════════════════════════════════════════"
   echo
+  log "Open5GS 5G Core Pods (namespace: ${NAMESPACE}):"
   kubectl get pods -n "${NAMESPACE}" -o wide
+  echo
+  log "Kamailio IMS Pods (namespace: ${IMS_NAMESPACE}):"
+  kubectl get pods -n "${IMS_NAMESPACE}" -o wide
   echo
   log "Node IP (AMF/UPF endpoint): ${NODE_IP}"
   log "AMF NGAP (SCTP N2):          ${NODE_IP}:38412"
   log "UPF GTP-U (UDP N3):          ${NODE_IP}:2152"
   log "UPF PFCP  (UDP N4):          ${NODE_IP}:8805"
+  log "P-CSCF SIP (UDP/TCP):        10.46.0.1:5060"
   echo
   log "To start RAN simulation:"
   echo "    bash scripts/run-gnb.sh"
-  echo "    sudo bash scripts/run-ue.sh"
+  echo "    sudo bash scripts/run-ue.sh 1"
+  echo "    sudo bash scripts/run-ue.sh 2"
   echo
-  log "To verify end-to-end health and traffic flow:"
+  log "To test end-to-end IMS SIP call & RTP voice stream:"
+  echo "    sudo bash scripts/test-ims-call.sh"
+  echo
+  log "To verify full end-to-end lab health:"
   echo "    sudo bash scripts/verify-lab.sh"
   echo
 }

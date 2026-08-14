@@ -1,3 +1,293 @@
+```markdown
+# 5G-IMS-Lab
+
+5G-IMS-Lab is a software-based 5G Standalone (SA) and IMS testbed built with Open5GS, UERANSIM, Kamailio, RTPEngine, and Kubernetes.
+
+The lab supports multiple simulated UEs and validates the end-to-end path from 5G registration and PDU session establishment to IMS SIP registration, call signaling, SDP negotiation, RTP media relay, and session teardown.
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph RAN["UERANSIM"]
+        UE1["UE1"]
+        UE2["UE2"]
+        GNB["gNodeB"]
+    end
+
+    subgraph CORE["5G SA Core / Kubernetes"]
+        AMF["AMF"]
+        SMF["SMF"]
+        UPF["UPF / ogstun"]
+        NFs["AUSF / UDM / UDR / PCF / NRF / BSF"]
+        DB[("MongoDB")]
+    end
+
+    subgraph IMS["IMS Service Layer / Kubernetes"]
+        PCSCF["P-CSCF"]
+        ICSCF["I-CSCF"]
+        SCSCF["S-CSCF"]
+        RTP["RTPEngine"]
+    end
+
+    UE1 --> GNB
+    UE2 --> GNB
+
+    GNB -->|"N2 / NGAP / SCTP"| AMF
+    GNB -->|"N3 / GTP-U"| UPF
+
+    AMF --- NFs
+    NFs --- DB
+    AMF --- SMF
+    SMF -->|"N4 / PFCP"| UPF
+
+    UPF -->|"IMS PDU Session"| PCSCF
+    PCSCF --> ICSCF
+    ICSCF --> SCSCF
+    PCSCF <-->|"NG Control"| RTP
+
+    UE1 -.->|"SIP"| PCSCF
+    UE2 -.->|"SIP"| PCSCF
+    UE1 ===|"RTP"| RTP
+    RTP ===|"RTP"| UE2
+```
+
+The 5G SA core provides IP connectivity for the IMS service layer. Kamailio handles SIP signaling, while RTPEngine anchors and relays the RTP media path.
+
+## Components
+
+| Component       | Role                            | Runtime                      |
+| --------------- | ------------------------------- | ---------------------------- |
+| Open5GS         | 5G SA Core network functions    | Kubernetes (`open5gs`)       |
+| MongoDB         | 5G subscriber database          | Kubernetes (`open5gs`)       |
+| UERANSIM        | Simulated gNodeB and UEs        | Host processes / Linux netns |
+| Kamailio P-CSCF | IMS SIP ingress proxy           | Kubernetes (`ims`)           |
+| Kamailio I-CSCF | IMS routing proxy               | Kubernetes (`ims`)           |
+| Kamailio S-CSCF | Registrar and SIP service logic | Kubernetes (`ims`)           |
+| RTPEngine       | SDP rewriting and RTP relay     | Kubernetes (`ims`)           |
+| kind            | Kubernetes cluster runtime      | Docker                       |
+
+## What Is Verified
+
+The current lab has been validated with two simulated UEs.
+
+| Area                   | Result                                                        |
+| ---------------------- | ------------------------------------------------------------- |
+| 5G SA Core             | 10/10 Open5GS pods Running and Ready                          |
+| 5G-AKA registration    | UE1 and UE2 successfully registered                           |
+| PDU sessions           | Internet and IMS sessions established for both UEs            |
+| Internet connectivity  | Ping and HTTPS access verified from both UE namespaces        |
+| IMS connectivity       | Both UEs reached the IMS gateway successfully                 |
+| SIP registration       | Digest MD5 challenge/response completed with `200 OK`         |
+| Registration stability | Repeated REGISTER requests passed with valid CSeq progression |
+| Subscriber location    | UE contacts verified through S-CSCF runtime state             |
+| SIP call signaling     | `INVITE → 180 Ringing → 200 OK → ACK` completed               |
+| SDP handling           | RTPEngine rewrote media endpoints                             |
+| RTP media              | 25/25 packets delivered in each direction with 0% packet loss |
+| Call teardown          | `BYE → 200 OK` completed and RTPEngine session was removed    |
+| IMS validation         | **22/22 passed**                                              |
+| Full lab regression    | **55/55 passed**                                              |
+
+```text
+IMS validation:        22/22 passed
+End-to-end SIP/RTP:    PASSED
+Full lab validation:   55/55 passed
+```
+
+The RTP test uses generated G.711 PCMU packets to validate the media path. It does not represent physical voice capture or playback.
+
+## Repository Structure
+
+```text
+5G-IMS-Lab/
+├── configs/
+│   ├── ueransim/              # gNodeB and UE configuration
+│   └── sipp/                  # SIP test scenarios and test data
+├── docs/
+│   ├── IMS-CALL-FLOW-VALIDATION.md
+│   └── engineering-notes/
+├── k8s/
+│   ├── control-plane.yaml
+│   ├── upf.yaml
+│   ├── mongodb.yaml
+│   └── ims/
+├── scripts/
+│   ├── start-lab.sh
+│   ├── run-gnb.sh
+│   ├── run-ue.sh
+│   ├── validate-ims-call.sh
+│   ├── test-ims-call.sh
+│   └── verify-lab.sh
+├── LICENSE
+└── README.md
+```
+
+## Requirements
+
+- Ubuntu 24.04 LTS
+- Docker Engine
+- kind
+- kubectl
+- UERANSIM
+- Linux `tun` and `sctp` support
+- `iproute2`
+- `iptables`
+- `curl`
+- `tcpdump`
+- Python 3
+
+The lab was tested on Ubuntu 24.04 LTS.
+
+## Quick Start
+
+Start the 5G Core and IMS environment:
+
+```bash
+sudo bash scripts/start-lab.sh
+```
+
+Start the simulated gNodeB:
+
+```bash
+bash scripts/run-gnb.sh
+```
+
+Start UE1:
+
+```bash
+sudo bash scripts/run-ue.sh 1
+```
+
+Start UE2:
+
+```bash
+sudo bash scripts/run-ue.sh 2
+```
+
+The UEs establish their PDU sessions dynamically. Their allocated IPv4 addresses may change after a restart.
+
+## Validation
+
+Run the IMS validation suite:
+
+```bash
+sudo bash scripts/validate-ims-call.sh
+```
+
+Run the focused SIP/RTP call test:
+
+```bash
+sudo bash scripts/test-ims-call.sh
+```
+
+Run the complete 5G SA + IMS regression suite:
+
+```bash
+sudo bash scripts/verify-lab.sh
+```
+
+Expected validation results:
+
+```text
+IMS validation:        22/22 passed
+End-to-end SIP/RTP:    PASSED
+Full lab validation:   55/55 passed
+```
+
+## Troubleshooting
+
+### SCTP / gNodeB Connection
+
+Check that SCTP support is available:
+
+```bash
+lsmod | grep sctp
+```
+
+Check the AMF endpoint:
+
+```bash
+ss -A sctp -l -n | grep 38412
+```
+
+### IMS Connectivity
+
+Verify that the UE IMS namespace can reach the IMS gateway:
+
+```bash
+sudo ip netns exec <ims-netns> ping 10.46.0.1
+```
+
+The exact namespace name is generated from the UE identity.
+
+### Dynamic UE Addresses
+
+UE addresses are allocated dynamically by the 5G core.
+
+Internet traffic uses:
+
+```text
+10.45.0.0/16
+```
+
+IMS traffic uses:
+
+```text
+10.46.0.0/16
+```
+
+The validation scripts discover the current addresses at runtime rather than relying on fixed UE IPs.
+
+### RTPEngine
+
+Check the RTPEngine pod:
+
+```bash
+kubectl get pods -n ims
+```
+
+Check its logs:
+
+```bash
+kubectl logs -n ims deployment/rtpengine
+```
+
+The NG control interface is exposed on UDP port `22222`.
+
+### RTP Media Debugging
+
+Capture traffic on the UPF TUN interface:
+
+```bash
+sudo tcpdump -i ogstun -n
+```
+
+For SIP signaling, capture traffic on the IMS UE namespace:
+
+```bash
+sudo ip netns exec <ims-netns> tcpdump -i uesimtun0 -n -s 0 -w sip.pcap
+```
+
+## Documentation
+
+- [IMS Call Flow Validation](docs/IMS-CALL-FLOW-VALIDATION.md)
+- [5G Registration Protocol Analysis](docs/engineering-notes/5g-registration-analysis.md)
+- [Linux Networking and Namespace Architecture](docs/engineering-notes/linux-networking-behind-5g.md)
+- [PDU Session Establishment and Debugging](docs/engineering-notes/debugging-pdu-session.md)
+- [IMS Manifest Architecture](k8s/ims/README.md)
+
+## Limitations
+
+- UERANSIM provides software-based RAN and UE emulation; no physical 5G radio hardware is used.
+- RTP validation uses generated G.711 PCMU packets rather than physical audio hardware.
+- UE IPv4 addresses are dynamically allocated and may change between sessions.
+- The environment is intended for laboratory testing, protocol validation, and experimentation rather than commercial carrier deployment.
+- The current validation covers the implemented 5G SA, SIP, SDP, and RTP paths; it does not claim full 3GPP Release compliance.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+```
 # 5G-IMS-Lab
 
 Multi-UE 5G SA + IMS testbed with end-to-end SIP and RTP validation
