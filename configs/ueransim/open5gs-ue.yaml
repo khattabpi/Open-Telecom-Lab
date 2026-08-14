@@ -1,12 +1,13 @@
 # UERANSIM UE Configuration for Open5GS
-# Open Telecom Lab — v1.0
+# Open Telecom Lab — v3.0
+# Reference: 3GPP TS 24.501 / TS 33.501
 
 # ─── Subscriber Identity ───────────────────────────────────────
 supi: 'imsi-001010000000001'
 
-# Home PLMN
-mcc: '602'
-mnc: '03'
+# Home PLMN (Standard 3GPP Test Network)
+mcc: '001'
+mnc: '01'
 
 # SUCI Protection (0 = Null scheme — no encryption of SUPI)
 protectionScheme: 0
@@ -15,11 +16,11 @@ homeNetworkPublicKeyId: 1
 routingIndicator: '0000'
 
 # ─── Authentication Credentials ────────────────────────────────
-# Permanent subscription key (K) — must match MongoDB subscriber
+# Permanent subscription key (K) — matches MongoDB subscriber
 key: '465B5CE8B199B49FAA5F0A2EE238A6BC'
 
-# Operator Code (OPc) — derived from OP and K
-op: 'E8ED289DEBA952E4283B54E88E6183CA'
+# Operator Code (OPc) — matches MongoDB subscriber (opc field)
+op: 'E8ED2441347B7990E92C19B0316CD6FC'
 opType: 'OPC'
 
 # Authentication Management Field
@@ -53,10 +54,15 @@ uacAcc:
   class14: false
   class15: false
 
-# ─── PDU Session ────────────────────────────────────────────────
+# ─── PDU Sessions (Dual-Slice: Internet + IMS) ──────────────────
 sessions:
   - type: 'IPv4'
     apn: 'internet'
+    slice:
+      sst: 1
+      sd: 0xFFFFFF
+  - type: 'IPv4'
+    apn: 'ims'
     slice:
       sst: 1
       sd: 0xFFFFFF

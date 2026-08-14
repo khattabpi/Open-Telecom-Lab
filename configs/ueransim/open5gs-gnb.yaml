@@ -1,10 +1,10 @@
 # UERANSIM gNodeB Configuration for Open5GS
-# Open Telecom Lab — v1.0
+# Open Telecom Lab — v3.0 (Kubernetes / Kind & Host Networking)
 # Reference: UERANSIM Wiki + 3GPP TS 38.413
 
-# PLMN Identity (Test Network)
-mcc: '602'
-mnc: '03'
+# PLMN Identity (Standard 3GPP Test Network)
+mcc: '001'
+mnc: '01'
 
 # NR Cell Identity
 nci: '0x000000010'
@@ -12,13 +12,13 @@ idLength: 32
 tac: 1
 
 # Transport Layer Addresses
-linkIp: 127.0.0.1     # gNB local bind
-ngapIp: 127.0.0.1     # N2 interface (SCTP → AMF)
-gtpIp: 127.0.0.2      # N3 interface (GTP-U → UPF)
+linkIp: 127.0.0.1     # gNB local bind for simulated radio link (UE search list)
+ngapIp: 172.19.0.1     # N2 interface (SCTP source on host kind bridge)
+gtpIp: 172.19.0.1      # N3 interface (GTP-U endpoint for UPF downlink)
 
-# AMF Configuration
+# AMF Configuration (Target kind control-plane node IP)
 amfConfigs:
-  - address: 127.0.0.1
+  - address: 172.19.0.2
     port: 38412          # SCTP port for NGAP
 
 # Network Slice Support

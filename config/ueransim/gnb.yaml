@@ -1,16 +1,16 @@
-mcc: '602'
-mnc: '03'
+mcc: '001'
+mnc: '01'
 
 nci: '0x000000010'
 idLength: 32
 tac: 1
 
 linkIp: 127.0.0.1
-ngapIp: 127.0.0.1
-gtpIp: 127.0.0.2
+ngapIp: 172.19.0.1
+gtpIp: 172.19.0.1
 
 amfConfigs:
-  - address: 127.0.0.1
+  - address: 172.19.0.2
     port: 38412
 
 slices:

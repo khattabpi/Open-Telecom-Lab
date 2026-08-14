@@ -4,6 +4,13 @@ logger:
   level: info
 
 smf:
+  info:
+    - s_nssai:
+        - sst: 1
+          sd: ffffff
+          dnn:
+            - internet
+            - ims
   sbi:
     server:
       - address: 172.20.0.21
@@ -13,7 +20,7 @@ smf:
         - uri: http://172.20.0.10:7777
   gtpu:
     server:
-      - address: 172.20.0.21   # ← ده السطر اللي كان ناقص
+      - address: 172.20.0.21
   pfcp:
     server:
       - address: 172.20.0.21

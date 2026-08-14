@@ -8,8 +8,8 @@ logger:
 nrf:
   serving:
     - plmn_id:
-        mcc: 901
-        mnc: 70
+        mcc: "001"
+        mnc: "01"
   sbi:
     server:
       - address: 0.0.0.0
