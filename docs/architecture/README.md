@@ -16,12 +16,12 @@ The laboratory implements a cloud-native hybrid architecture:
 flowchart TB
     subgraph UE_NETNS["User Equipment Subsystem (UERANSIM / Netns)"]
         direction TB
-        UE1["UE1 (IMSI: 001010000000001)<br/>Internet: 10.45.0.0/16<br/>IMS: 10.46.0.0/16<br/>SIP: sip:ue1@ims.lab"]
-        UE2["UE2 (IMSI: 001010000000002)<br/>Internet: 10.45.0.0/16<br/>IMS: 10.46.0.0/16<br/>SIP: sip:ue2@ims.lab"]
+        UE1["UE1 (IMSI: 602030000000001 | PLMN: 602/03)<br/>Internet: 10.45.0.0/16<br/>IMS: 10.46.0.0/16<br/>SIP: sip:ue1@ims.lab"]
+        UE2["UE2 (IMSI: 602040000000002 | PLMN: 602/04)<br/>Internet: 10.45.0.0/16<br/>IMS: 10.46.0.0/16<br/>SIP: sip:ue2@ims.lab"]
     end
 
-    subgraph RAN["Radio Access Network (UERANSIM)"]
-        GNB["gNodeB (nr-gnb)<br/>TAC: 1 | PLMN: 001/01"]
+    subgraph RAN["Radio Access Network (UERANSIM Multi-PLMN)"]
+        GNB["gNodeB (nr-gnb)<br/>TAC: 1 | PLMNs: 602/03 & 602/04 (RAN Sharing)"]
     end
 
     subgraph K8S_5GC["5G SA Core Network (Kubernetes: open5gs)"]

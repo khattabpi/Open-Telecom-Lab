@@ -17,10 +17,11 @@ The following configuration values in this repository are **test-only credential
 
 | Parameter | Value | Purpose |
 |-----------|-------|---------|
-| SUPI/IMSI | `001010000000001` | Test subscriber identity |
+| SUPI/IMSI (UE1) | `602030000000001` | Test subscriber identity (PLMN 602/03) |
+| SUPI/IMSI (UE2) | `602040000000002` | Test subscriber identity (PLMN 602/04) |
 | K | `465B5CE8...` | Test authentication key |
 | OPc | `E8ED2441...` | Test operator code |
-| PLMN | `001/01` | 3GPP test network MCC/MNC |
+| PLMNs | `602/03`, `602/04` | Simulated test network MCC/MNCs |
 
 > **🔒 Never use real subscriber credentials (IMSI, Ki, OPc) in this or any public repository.**
 
@@ -40,6 +41,6 @@ If you discover a security issue in this project:
 
 - Run the lab on an **isolated network** or behind a firewall.
 - Do not expose Open5GS NF interfaces to the public internet.
-- Use test PLMN values (`001/01`) — never real operator credentials.
+- Use lab/test PLMN values (`602/03`, `602/04`) — never real operator credentials.
 - Regularly update Open5GS and UERANSIM to patched versions.
 - Review `iptables` rules before enabling NAT forwarding.

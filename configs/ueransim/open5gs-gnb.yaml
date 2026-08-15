@@ -2,9 +2,16 @@
 # Open Telecom Lab — v3.0 (Kubernetes / Kind & Host Networking)
 # Reference: UERANSIM Wiki + 3GPP TS 38.413
 
-# PLMN Identity (Standard 3GPP Test Network)
-mcc: '001'
-mnc: '01'
+# PLMN Identity
+mcc: '602'
+mnc: '03'
+
+# Supported PLMNs (Multi-PLMN / RAN Sharing)
+plmnList:
+  - mcc: '602'
+    mnc: '03'
+  - mcc: '602'
+    mnc: '04'
 
 # NR Cell Identity
 nci: '0x000000010'

@@ -15,7 +15,7 @@ This directory contains the Kubernetes manifests and configurations to deploy a 
                   ┌────────────────────┴────────────────────┐
                   │                                         │
        [UE1: 10.46.0.x:5060]                     [UE2: 10.46.0.y:5060]
-       IMSI: 001010000000001                     IMSI: 001010000000002
+       IMSI: 602030000000001 (602/03)            IMSI: 602040000000002 (602/04)
        SIP: sip:ue1@ims.lab                      SIP: sip:ue2@ims.lab
                   │                                         │
                   └────────────────────┬────────────────────┘
@@ -73,8 +73,8 @@ This directory contains the Kubernetes manifests and configurations to deploy a 
 
 | Subscriber | IMSI | IMPU (SIP URI) | IMPI (Auth User) | Password | IMS IP Allocation |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **UE1** | `001010000000001` | `sip:ue1@ims.lab` | `ue1` | `password123` | Dynamic (`10.46.0.0/16`) |
-| **UE2** | `001010000000002` | `sip:ue2@ims.lab` | `ue2` | `password123` | Dynamic (`10.46.0.0/16`) |
+| **UE1** | `602030000000001` (PLMN `602/03`) | `sip:ue1@ims.lab` | `ue1` | `password123` | Dynamic (`10.46.0.0/16`) |
+| **UE2** | `602040000000002` (PLMN `602/04`) | `sip:ue2@ims.lab` | `ue2` | `password123` | Dynamic (`10.46.0.0/16`) |
 
 ---
 

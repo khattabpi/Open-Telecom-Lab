@@ -175,8 +175,8 @@ check_subscriber_db() {
     fi
 }
 
-check_subscriber_db "001010000000001" "UE1 Subscriber"
-check_subscriber_db "001010000000002" "UE2 Subscriber"
+check_subscriber_db "602030000000001" "UE1 Subscriber (PLMN 602/03)"
+check_subscriber_db "602040000000002" "UE2 Subscriber (PLMN 602/04)"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
@@ -308,6 +308,14 @@ test_ue_user_plane() {
             fi
 
             # HTTPS Curl
+            if [ ! -f "/etc/netns/${internet_ns}/resolv.conf" ]; then
+                mkdir -p "/etc/netns/${internet_ns}"
+                cat << 'EOF' > "/etc/netns/${internet_ns}/resolv.conf"
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+nameserver 1.1.1.1
+EOF
+            fi
             if ip netns exec "${internet_ns}" curl -sI --max-time 10 https://www.google.com 2>/dev/null | grep -qi "HTTP/[123]"; then
                 check_pass "${label} HTTPS Data Path: curl https://www.google.com succeeded"
             else
@@ -342,9 +350,9 @@ test_ue_user_plane() {
     fi
 }
 
-test_ue_user_plane "001010000000001" "UE1"
+test_ue_user_plane "602030000000001" "UE1 (PLMN 602/03)"
 echo ""
-test_ue_user_plane "001010000000002" "UE2"
+test_ue_user_plane "602040000000002" "UE2 (PLMN 602/04)"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
@@ -367,8 +375,10 @@ if kubectl get ns ims >/dev/null 2>&1; then
     done
 
     # Check P-CSCF SIP Service Ingress on 10.46.0.1:5060
-    ue1_ims_ip=$(ip netns exec "ueransim-001010000000001-ims-psi2" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 || echo "")
-    if [ -n "${ue1_ims_ip}" ] && ip netns exec "ueransim-001010000000001-ims-psi2" python3 -c "
+    ue1_ims_ns=$(ip netns list 2>/dev/null | grep -E "ueransim-602030000000001-ims-psi2|ueransim-.*-ims-psi2" | head -n 1 | awk '{print $1}' || echo "ueransim-602030000000001-ims-psi2")
+    [ -z "${ue1_ims_ns}" ] && ue1_ims_ns="ueransim-602030000000001-ims-psi2"
+    ue1_ims_ip=$(ip netns exec "${ue1_ims_ns}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 || echo "")
+    if [ -n "${ue1_ims_ip}" ] && ip netns exec "${ue1_ims_ns}" python3 -c "
 import socket
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.settimeout(2.0)

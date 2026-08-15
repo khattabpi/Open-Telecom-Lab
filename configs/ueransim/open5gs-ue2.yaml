@@ -3,11 +3,11 @@
 # Reference: 3GPP TS 24.501 / TS 33.501
 
 # ─── Subscriber Identity ───────────────────────────────────────
-supi: 'imsi-001010000000002'
+supi: 'imsi-602040000000002'
 
-# Home PLMN (Standard 3GPP Test Network)
-mcc: '001'
-mnc: '01'
+# Home PLMN
+mcc: '602'
+mnc: '04'
 
 # SUCI Protection (0 = Null scheme — no encryption of SUPI)
 protectionScheme: 0

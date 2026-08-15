@@ -18,7 +18,7 @@ Living document tracking the milestones and technical roadmap for the 5G Standal
 ## 🟢 Milestone 2: Cloud-Native & Multi-UE Infrastructure `COMPLETED`
 
 - [x] Kubernetes (`kind`) container orchestration for 5G Core network functions
-- [x] Multi-UE simulation with independent IMSIs (`001010000000001` and `001010000000002`)
+- [x] Multi-UE simulation with independent PLMNs/IMSIs (`602030000000001` [602/03] and `602040000000002` [602/04])
 - [x] Linux network namespace isolation for parallel UE data planes
 - [x] Concurrent dual PDU sessions per UE (`internet` + `ims` bearers)
 - [x] Dynamic IPv4 address pool management (`10.45.0.0/16` and `10.46.0.0/16`)

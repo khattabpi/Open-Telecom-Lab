@@ -71,12 +71,12 @@ When `useNamespace: true` is configured in `open5gs-ue.yaml` and `open5gs-ue2.ya
 Namespace Naming Convention: ueransim-{IMSI}-{DNN}-psi{PSI}
 
 Active Lab Namespaces:
-├── UE1 (001010000000001):
-│   ├── Internet: ueransim-001010000000001-internet-psi1  (IP: 10.45.0.x)
-│   └── IMS:      ueransim-001010000000001-ims-psi2       (IP: 10.46.0.x)
-└── UE2 (001010000000002):
-    ├── Internet: ueransim-001010000000002-internet-psi1  (IP: 10.45.0.y)
-    └── IMS:      ueransim-001010000000002-ims-psi2       (IP: 10.46.0.y)
+├── UE1 (602030000000001 [PLMN 602/03]):
+│   ├── Internet: ueransim-602030000000001-internet-psi1  (IP: 10.45.0.x)
+│   └── IMS:      ueransim-602030000000001-ims-psi2       (IP: 10.46.0.x)
+└── UE2 (602040000000002 [PLMN 602/04]):
+    ├── Internet: ueransim-602040000000002-internet-psi1  (IP: 10.45.0.y)
+    └── IMS:      ueransim-602040000000002-ims-psi2       (IP: 10.46.0.y)
 ```
 
 This ensures complete traffic isolation between subscribers and across network slices.
@@ -86,11 +86,11 @@ This ensures complete traffic isolation between subscribers and across network s
 sudo ip netns list
 
 # Execute commands inside UE1's Internet namespace
-sudo ip netns exec ueransim-001010000000001-internet-psi1 ip addr
-sudo ip netns exec ueransim-001010000000001-internet-psi1 ping -c 2 8.8.8.8
+sudo ip netns exec ueransim-602030000000001-internet-psi1 ip addr
+sudo ip netns exec ueransim-602030000000001-internet-psi1 ping -c 2 8.8.8.8
 
 # Execute SIP diagnostics inside UE1's IMS namespace
-sudo ip netns exec ueransim-001010000000001-ims-psi2 ping -c 2 10.46.0.1
+sudo ip netns exec ueransim-602030000000001-ims-psi2 ping -c 2 10.46.0.1
 ```
 
 ---

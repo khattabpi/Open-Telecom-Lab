@@ -5,8 +5,8 @@
 # Usage:
 #   bash scripts/add-subscriber.sh            # Provision all test UEs (UE1 & UE2)
 #   bash scripts/add-subscriber.sh all        # Provision all test UEs (UE1 & UE2)
-#   bash scripts/add-subscriber.sh 1          # Provision UE1 (001010000000001)
-#   bash scripts/add-subscriber.sh 2          # Provision UE2 (001010000000002)
+#   bash scripts/add-subscriber.sh 1          # Provision UE1 (602030000000001)
+#   bash scripts/add-subscriber.sh 2          # Provision UE2 (602040000000002)
 #   bash scripts/add-subscriber.sh [IMSI] [K] [OPC]  # Provision custom subscriber
 #
 # Supports Kubernetes (open5gs/mongodb-0), Docker Compose (mongodb),
@@ -143,12 +143,12 @@ print('[✓] Subscriber ' + '${imsi}' + ' added/updated successfully with dual-s
 TARGET="${1:-all}"
 
 if [ "${TARGET}" = "all" ]; then
-    provision_subscriber "001010000000001" "465B5CE8B199B49FAA5F0A2EE238A6BC" "E8ED2441347B7990E92C19B0316CD6FC"
-    provision_subscriber "001010000000002" "465B5CE8B199B49FAA5F0A2EE238A6BD" "E8ED2441347B7990E92C19B0316CD6FC"
+    provision_subscriber "602030000000001" "465B5CE8B199B49FAA5F0A2EE238A6BC" "E8ED2441347B7990E92C19B0316CD6FC"
+    provision_subscriber "602040000000002" "465B5CE8B199B49FAA5F0A2EE238A6BD" "E8ED2441347B7990E92C19B0316CD6FC"
 elif [ "${TARGET}" = "1" ] || [ "${TARGET}" = "ue1" ]; then
-    provision_subscriber "001010000000001" "465B5CE8B199B49FAA5F0A2EE238A6BC" "E8ED2441347B7990E92C19B0316CD6FC"
+    provision_subscriber "602030000000001" "465B5CE8B199B49FAA5F0A2EE238A6BC" "E8ED2441347B7990E92C19B0316CD6FC"
 elif [ "${TARGET}" = "2" ] || [ "${TARGET}" = "ue2" ]; then
-    provision_subscriber "001010000000002" "465B5CE8B199B49FAA5F0A2EE238A6BD" "E8ED2441347B7990E92C19B0316CD6FC"
+    provision_subscriber "602040000000002" "465B5CE8B199B49FAA5F0A2EE238A6BD" "E8ED2441347B7990E92C19B0316CD6FC"
 else
     IMSI="${1}"
     KI="${2:-465B5CE8B199B49FAA5F0A2EE238A6BC}"

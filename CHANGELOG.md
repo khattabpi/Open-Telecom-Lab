@@ -16,8 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - SDP offer/answer endpoint rewriting to `10.46.0.1` and dynamic media relay ports (`20000-20100`).
   - NG protocol control over UDP port `22222`.
   - Automatic media session deletion upon BYE dialog teardown.
-- **Multi-UE 5G SA Support**:
-  - Parallel UE instances (`001010000000001` and `001010000000002`) with independent network namespaces.
+- **Multi-UE 5G SA & Multi-PLMN Support**:
+  - Parallel multi-PLMN UE instances (`602030000000001` [PLMN 602/03] and `602040000000002` [PLMN 602/04]) with independent network namespaces.
+  - Shared gNodeB multi-PLMN SIB1 broadcast and NGAP setup.
   - Concurrent dual PDU sessions (`internet` and `ims` DNNs).
   - Dynamic SMF IP address resolution across `10.45.0.0/16` and `10.46.0.0/16`.
 - **Automated Verification Suite**:

@@ -5,8 +5,8 @@
 # Usage:
 #   sudo bash scripts/run-ue.sh          # Launch both UE1 & UE2
 #   sudo bash scripts/run-ue.sh all      # Launch both UE1 & UE2
-#   sudo bash scripts/run-ue.sh 1        # Launch UE1 (IMSI 001010000000001)
-#   sudo bash scripts/run-ue.sh 2        # Launch UE2 (IMSI 001010000000002)
+#   sudo bash scripts/run-ue.sh 1        # Launch UE1 (IMSI 602030000000001)
+#   sudo bash scripts/run-ue.sh 2        # Launch UE2 (IMSI 602040000000002)
 #   sudo bash scripts/run-ue.sh stop     # Stop all running UEs
 #   sudo bash scripts/run-ue.sh stop 1   # Stop UE1 only
 #   sudo bash scripts/run-ue.sh stop 2   # Stop UE2 only
@@ -47,21 +47,25 @@ stop_ue() {
     local id="$1"
     case "${id}" in
         1|ue1)
-            echo "[+] Stopping UE1 (IMSI 001010000000001)..."
+            echo "[+] Stopping UE1 (IMSI 602030000000001)..."
             pkill -9 -f 'nr-ue.*open5gs-ue(\.yaml|1\.yaml)' 2>/dev/null || true
             sleep 1
+            cleanup_namespaces_for_imsi "602030000000001"
             cleanup_namespaces_for_imsi "001010000000001"
             ;;
         2|ue2)
-            echo "[+] Stopping UE2 (IMSI 001010000000002)..."
+            echo "[+] Stopping UE2 (IMSI 602040000000002)..."
             pkill -9 -f 'nr-ue.*open5gs-ue2\.yaml' 2>/dev/null || true
             sleep 1
+            cleanup_namespaces_for_imsi "602040000000002"
             cleanup_namespaces_for_imsi "001010000000002"
             ;;
         all|"")
             echo "[+] Stopping all nr-ue instances..."
             pkill -9 -f 'nr-ue' 2>/dev/null || true
             sleep 1
+            cleanup_namespaces_for_imsi "602030000000001"
+            cleanup_namespaces_for_imsi "602040000000002"
             cleanup_namespaces_for_imsi "001010000000001"
             cleanup_namespaces_for_imsi "001010000000002"
             ;;
@@ -98,8 +102,14 @@ start_single_ue() {
 }
 
 setup_netns_dns() {
-    sleep 1
-    for ns in $(ip netns list 2>/dev/null | awk '{print $1}'); do
+    # Ensure known UE namespaces and any active namespaces have valid DNS config
+    local known_ns=(
+        "ueransim-602030000000001-internet-psi1"
+        "ueransim-602030000000001-ims-psi2"
+        "ueransim-602040000000002-internet-psi1"
+        "ueransim-602040000000002-ims-psi2"
+    )
+    for ns in "${known_ns[@]}" $(ip netns list 2>/dev/null | awk '{print $1}'); do
         mkdir -p "/etc/netns/${ns}"
         cat << 'EOF' > "/etc/netns/${ns}/resolv.conf"
 nameserver 8.8.8.8
@@ -120,21 +130,21 @@ fi
 case "${TARGET}" in
     1|ue1)
         stop_ue 1
-        start_single_ue "UE1 (001010000000001)" "${UE1_CONFIG}" "/tmp/ueransim-ue1.log" "001010000000001"
+        start_single_ue "UE1 (602030000000001)" "${UE1_CONFIG}" "/tmp/ueransim-ue1.log" "602030000000001"
         cp -f "/tmp/ueransim-ue1.log" "/tmp/ueransim-ue.log" 2>/dev/null || true
         setup_netns_dns
         ;;
     2|ue2)
         stop_ue 2
-        start_single_ue "UE2 (001010000000002)" "${UE2_CONFIG}" "/tmp/ueransim-ue2.log" "001010000000002"
+        start_single_ue "UE2 (602040000000002)" "${UE2_CONFIG}" "/tmp/ueransim-ue2.log" "602040000000002"
         setup_netns_dns
         ;;
     all)
         stop_ue all
-        start_single_ue "UE1 (001010000000001)" "${UE1_CONFIG}" "/tmp/ueransim-ue1.log" "001010000000001"
+        start_single_ue "UE1 (602030000000001)" "${UE1_CONFIG}" "/tmp/ueransim-ue1.log" "602030000000001"
         cp -f "/tmp/ueransim-ue1.log" "/tmp/ueransim-ue.log" 2>/dev/null || true
         sleep 1
-        start_single_ue "UE2 (001010000000002)" "${UE2_CONFIG}" "/tmp/ueransim-ue2.log" "001010000000002"
+        start_single_ue "UE2 (602040000000002)" "${UE2_CONFIG}" "/tmp/ueransim-ue2.log" "602040000000002"
         setup_netns_dns
         ;;
     *)

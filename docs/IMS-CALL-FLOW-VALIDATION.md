@@ -13,7 +13,7 @@ This document details the architecture, SIP signaling transactions, RTPEngine me
                   ┌────────────────────┴────────────────────┐
                   │                                         │
        [UE1: 10.46.0.7:5060]                     [UE2: 10.46.0.8:5060]
-       IMSI: 001010000000001                     IMSI: 001010000000002
+       IMSI: 602030000000001 (602/03)            IMSI: 602040000000002 (602/04)
        SIP: sip:ue1@ims.lab                      SIP: sip:ue2@ims.lab
                   │                                         │
                   └────────────────────┬────────────────────┘

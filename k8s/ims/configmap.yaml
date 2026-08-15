@@ -24,9 +24,9 @@ data:
     )''')
     subscribers = [
         ("ue1", "ims.lab", "password123"),
-        ("001010000000001", "ims.lab", "password123"),
+        ("602030000000001", "ims.lab", "password123"),
         ("ue2", "ims.lab", "password123"),
-        ("001010000000002", "ims.lab", "password123"),
+        ("602040000000002", "ims.lab", "password123"),
         ("ue1", "10.46.0.1", "password123"),
         ("ue2", "10.46.0.1", "password123")
     ]

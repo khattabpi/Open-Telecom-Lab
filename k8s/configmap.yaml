@@ -35,21 +35,38 @@ data:
             port: 38412
       guami:
         - plmn_id:
-            mcc: "001"
-            mnc: "01"
+            mcc: "602"
+            mnc: "03"
+          amf_id:
+            region: 2
+            set: 1
+            pointer: 1
+        - plmn_id:
+            mcc: "602"
+            mnc: "04"
           amf_id:
             region: 2
             set: 1
             pointer: 1
       tai:
         - plmn_id:
-            mcc: "001"
-            mnc: "01"
+            mcc: "602"
+            mnc: "03"
+          tac: 1
+        - plmn_id:
+            mcc: "602"
+            mnc: "04"
           tac: 1
       plmn_support:
         - plmn_id:
-            mcc: "001"
-            mnc: "01"
+            mcc: "602"
+            mnc: "03"
+          s_nssai:
+            - sst: 1
+              sd: ffffff
+        - plmn_id:
+            mcc: "602"
+            mnc: "04"
           s_nssai:
             - sst: 1
               sd: ffffff

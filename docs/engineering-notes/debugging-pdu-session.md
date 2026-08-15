@@ -178,12 +178,12 @@ sudo iptables -t nat -L POSTROUTING -n -v | grep -E "10.45.0.0|10.46.0.0"
 
 ```bash
 # Test from UE1 Internet namespace
-sudo ip netns exec ueransim-001010000000001-internet-psi1 ping -c 2 10.45.0.1
-sudo ip netns exec ueransim-001010000000001-internet-psi1 ping -c 2 8.8.8.8
-sudo ip netns exec ueransim-001010000000001-internet-psi1 curl -s -I https://www.google.com
+sudo ip netns exec ueransim-602030000000001-internet-psi1 ping -c 2 10.45.0.1
+sudo ip netns exec ueransim-602030000000001-internet-psi1 ping -c 2 8.8.8.8
+sudo ip netns exec ueransim-602030000000001-internet-psi1 curl -s -I https://www.google.com
 
 # Test from UE1 IMS namespace
-sudo ip netns exec ueransim-001010000000001-ims-psi2 ping -c 2 10.46.0.1
+sudo ip netns exec ueransim-602030000000001-ims-psi2 ping -c 2 10.46.0.1
 ```
 
 ---
@@ -196,8 +196,8 @@ The UE sends a Registration Request but receives an Authentication Reject or enc
 
 | Subscriber | IMSI | K | OPc | AMF |
 |---|---|---|---|---|
-| **UE1** | `001010000000001` | `465B5CE8B199B49FAA5F0A2EE238A6BC` | `E8ED2441347B7990E92C19B0316CD6FC` | `8000` |
-| **UE2** | `001010000000002` | `465B5CE8B199B49FAA5F0A2EE238A6BD` | `E8ED2441347B7990E92C19B0316CD6FC` | `8000` |
+| **UE1 (PLMN 602/03)** | `602030000000001` | `465B5CE8B199B49FAA5F0A2EE238A6BC` | `E8ED2441347B7990E92C19B0316CD6FC` | `8000` |
+| **UE2 (PLMN 602/04)** | `602040000000002` | `465B5CE8B199B49FAA5F0A2EE238A6BD` | `E8ED2441347B7990E92C19B0316CD6FC` | `8000` |
 
 ### Verification
 

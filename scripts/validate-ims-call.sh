@@ -80,7 +80,8 @@ echo ""
 # 3. SIP & Media Interfaces
 echo -e "${BOLD}3. SIP & Media Control Interfaces${NC}"
 # Check P-CSCF SIP Interface on 10.46.0.1:5060
-UE1_NS="ueransim-001010000000001-ims-psi2"
+UE1_NS=$(ip netns list 2>/dev/null | grep -E "ueransim-602030000000001-ims-psi2|ueransim-.*-ims-psi2" | head -n 1 | awk '{print $1}' || echo "ueransim-602030000000001-ims-psi2")
+[ -z "${UE1_NS}" ] && UE1_NS="ueransim-602030000000001-ims-psi2"
 UE1_IP=$(ip netns exec "${UE1_NS}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 || echo "")
 if [ -n "${UE1_IP}" ] && ip netns exec "${UE1_NS}" python3 -c "
 import socket
@@ -119,8 +120,9 @@ echo ""
 
 # 4. UE Network Namespaces & User Plane Bearers
 echo -e "${BOLD}4. 5G SA IMS Bearer Network Namespaces${NC}"
+UE_IMSIS=("602030000000001" "602040000000002")
 for ue_idx in 1 2; do
-    imsi="00101000000000${ue_idx}"
+    imsi="${UE_IMSIS[$((ue_idx - 1))]}"
     ns="ueransim-${imsi}-ims-psi2"
     if ip netns list | grep -q "${ns}"; then
         check_pass "UE${ue_idx} IMS Namespace '${ns}' active"
