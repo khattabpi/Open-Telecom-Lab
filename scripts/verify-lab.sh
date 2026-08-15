@@ -547,6 +547,122 @@ fi
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
+# 11. Phase 4 Service Assurance & Real-Time KPI Engine
+# ─────────────────────────────────────────────────────────────────
+echo -e "${BOLD}11. Phase 4 Service Assurance & Real-Time KPI Engine${NC}"
+
+if [ -f "scripts/measure-kpis.sh" ]; then
+    KPI_JSON=$(bash scripts/measure-kpis.sh --json 2>/dev/null || echo "[]")
+
+    if python3 -c "
+import json, sys
+data = json.loads('''${KPI_JSON}''')
+dom = next((d for d in data if 'Domestic' in d['call_type']), None)
+assert dom is not None and dom['sip_kpis']['pdd_ms'] is not None and dom['sip_kpis']['pdd_ms'] < 200.0
+" &>/dev/null; then
+        check_pass "[ASSUR-01] Post-Dial Delay (PDD) measured for Domestic Call (< 200 ms)"
+    else
+        check_fail "[ASSUR-01] Domestic Call PDD measurement failed or exceeded SLA"
+    fi
+
+    if python3 -c "
+import json, sys
+data = json.loads('''${KPI_JSON}''')
+roam = next((d for d in data if 'Roaming' in d['call_type']), None)
+assert roam is not None and roam['sip_kpis']['pdd_ms'] is not None and roam['sip_kpis']['pdd_ms'] < 200.0
+" &>/dev/null; then
+        check_pass "[ASSUR-02] Post-Dial Delay (PDD) measured for Roaming Call (< 200 ms)"
+    else
+        check_fail "[ASSUR-02] Roaming Call PDD measurement failed or exceeded SLA"
+    fi
+
+    if python3 -c "
+import json, sys
+data = json.loads('''${KPI_JSON}''')
+assert all(d['sip_kpis']['cst_ms'] is not None and d['sip_kpis']['cst_ms'] < 500.0 for d in data)
+" &>/dev/null; then
+        check_pass "[ASSUR-03] Call Setup Time (CST) measured for all sessions (< 500 ms)"
+    else
+        check_fail "[ASSUR-03] Call Setup Time (CST) measurement failed or exceeded SLA"
+    fi
+
+    if python3 -c "
+import json, sys
+data = json.loads('''${KPI_JSON}''')
+assert all(d['sip_kpis']['cssr_pct'] == 100.0 for d in data)
+" &>/dev/null; then
+        check_pass "[ASSUR-04] Call Setup Success Rate (CSSR) calculation verified (100.0%)"
+    else
+        check_fail "[ASSUR-04] CSSR calculation invalid or below 100%"
+    fi
+
+    if python3 -c "
+import json, sys
+data = json.loads('''${KPI_JSON}''')
+assert all(d['rtp_kpis']['overall_loss_pct'] == 0.0 for d in data)
+" &>/dev/null; then
+        check_pass "[ASSUR-05] RTP packet loss rate measured from real counters (0.0% loss)"
+    else
+        check_fail "[ASSUR-05] RTP packet loss measurement failed"
+    fi
+
+    if python3 -c "
+import json, sys
+data = json.loads('''${KPI_JSON}''')
+assert all(d['rtp_kpis']['sequence_status'] == 'PASS' for d in data)
+" &>/dev/null; then
+        check_pass "[ASSUR-06] RTP sequence continuity validated (0 missing, 0 out-of-order)"
+    else
+        check_fail "[ASSUR-06] RTP sequence continuity check failed"
+    fi
+
+    if python3 -c "
+import json, sys
+data = json.loads('''${KPI_JSON}''')
+assert all(d['rtp_kpis']['overall_jitter_ms'] < 20.0 for d in data)
+" &>/dev/null; then
+        check_pass "[ASSUR-07] RFC 3550 RTP inter-arrival jitter measured (< 20.0 ms)"
+    else
+        check_fail "[ASSUR-07] RFC 3550 RTP jitter calculation failed or exceeded SLA"
+    fi
+
+    if python3 -c "
+import json, sys
+data = json.loads('''${KPI_JSON}''')
+assert all(d['voice_quality']['r_factor'] > 80.0 and d['voice_quality']['estimated_mos'] >= 4.0 for d in data)
+" &>/dev/null; then
+        check_pass "[ASSUR-08] R-factor & Estimated MOS calculated (ITU-T G.107 E-model approximation)"
+    else
+        check_fail "[ASSUR-08] Voice quality R-factor/MOS estimation failed"
+    fi
+
+    if python3 -c "
+import json, sys
+data = json.loads('''${KPI_JSON}''')
+dom = next((d for d in data if 'Domestic' in d['call_type']), None)
+assert dom is not None and dom['overall_status'] == 'PASS'
+" &>/dev/null; then
+        check_pass "[ASSUR-09] Domestic Service Assurance & Real-Time KPI Report generated"
+    else
+        check_fail "[ASSUR-09] Domestic Service Assurance report generation failed"
+    fi
+
+    if python3 -c "
+import json, sys
+data = json.loads('''${KPI_JSON}''')
+roam = next((d for d in data if 'Roaming' in d['call_type']), None)
+assert roam is not None and roam['overall_status'] == 'PASS'
+" &>/dev/null; then
+        check_pass "[ASSUR-10] Roaming Service Assurance & Real-Time KPI Report generated"
+    else
+        check_fail "[ASSUR-10] Roaming Service Assurance report generation failed"
+    fi
+else
+    check_warn "scripts/measure-kpis.sh not found"
+fi
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
