@@ -12,8 +12,8 @@
 [![Observability](https://img.shields.io/badge/Telemetry-Prometheus%20v2.45-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/)
 [![Visualization](https://img.shields.io/badge/Dashboard-Grafana%20v10.4-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
 [![Alerting](https://img.shields.io/badge/Alerting-Alertmanager%20v0.25-crimson)](https://prometheus.io/docs/alerting/latest/alertmanager/)
-[![Validation](https://img.shields.io/badge/Validation-147%2F147%20Passed-brightgreen)](#-validation--test-results)
-[![Golden Baseline](https://img.shields.io/badge/Golden%20Baseline-phase5.4--golden-purple)](#project-milestones--golden-baseline)
+[![Validation](https://img.shields.io/badge/Validation-169%2F169%20Passed-brightgreen)](#-validation--test-results)
+[![Golden Baseline](https://img.shields.io/badge/Golden%20Baseline-phase5.5--golden-purple)](#project-milestones--golden-baseline)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
 
 ---
@@ -30,6 +30,7 @@
 - [IMS & Vo5G Service Layer](#ims--vo5g-service-layer)
 - [Multi-PLMN Local Breakout (LBO) Roaming](#multi-plmn-local-breakout-lbo-roaming)
 - [QoS, Policy Control & Charging Accounting](#qos-policy-control--charging-accounting)
+- [Telecom Rating & Prepaid Balance Subsystem](#telecom-rating--prepaid-balance-subsystem)
 - [Full-Stack Observability: Prometheus & Grafana](#full-stack-observability-prometheus--grafana)
 - [Alerting & Incident Detection (Alertmanager)](#alerting--incident-detection-alertmanager)
 - [Service Assurance & Real-Time KPIs](#service-assurance--real-time-kpis)
@@ -74,13 +75,13 @@ The laboratory establishes an end-to-end telecommunications environment supporti
 │ • 5G SA Core (Open5GS v2.8.0) │ • Kamailio P-CSCF / I-CSCF /     │ • Prometheus Scrape Pipeline  │
 │ • Kubernetes (kind) Cluster   │   S-CSCF with USRLOC Database    │ • 7-Domain OpenMetrics Model  │
 │ • Dual PDU Sessions per UE    │ • RTPEngine Media Relay Proxy    │ • Grafana Operations (30300)  │
-│   - Internet (10.45.0.0/16)   │ • SIP Digest MD5 Authentication  │   43 Visual Panels / 9 Rows   │
+│   - Internet (10.45.0.0/16)   │ • SIP Digest MD5 Authentication  │   53 Visual Panels / 10 Rows   │
 │   - IMS Bearer (10.46.0.0/16) │ • Domestic IMS Voice (UE1 ↔ UE2) │ • Alertmanager Engine (30093) │
-│ • Multi-PLMN RAN Isolation:   │ • Inter-PLMN Roaming Voice       │ • 21 Declarative Alert Rules  │
+│ • Multi-PLMN RAN Isolation:   │ • Inter-PLMN Roaming Voice       │ • 26 Declarative Alert Rules  │
 │   - Home: 602/03 & 602/04     │   (UE1 Egypt ↔ UE3 Bosnia LBO)   │ • Automated Fault Injection   │
 │   - Visited: 218/90           │ • Bidirectional RTP (0% Loss)    │ • Offline SQLite CDR Engine   │
 │ • Dedicated N2/N3 Associations│ • DiffServ / tc Priority Queues  │ • Service Assurance KPI Engine│
-│ • 5G-AKA Security Handshake   │ • Static PCF/BSF Policy Control  │ • 147/147 Automated Tests     │
+│ • 5G-AKA Security Handshake   │ • Static PCF/BSF Policy Control  │ • 169/169 Automated Tests     │
 └───────────────────────────────┴──────────────────────────────────┴───────────────────────────────┘
 ```
 
@@ -201,7 +202,7 @@ flowchart TB
 | **Metrics Exporter**| Custom Python | Python 3.12 | Kubernetes (`monitoring`)| 7-domain OpenMetrics collector querying K8s API, Open5GS, SIP, CDRs, Netns |
 | **Metrics Engine** | Prometheus | v2.45.0 | Kubernetes (`monitoring`)| Time-series engine (`:30090`), 5s scrape interval, 21 alert rule evaluation |
 | **Alert Engine** | Alertmanager | v0.25.0 | Kubernetes (`monitoring`)| Low-latency incident routing, deduplication, and notification dispatch (`:30093`)|
-| **Visual Dashboard**| Grafana | v10.4.0 | Kubernetes (`monitoring`)| Operations command center (`:30300`), 43 visual panels across Sections A–I |
+| **Visual Dashboard**| Grafana | v10.4.0 | Kubernetes (`monitoring`)| Operations command center (`:30300`), 53 visual panels across Sections A–I |
 | **Orchestration** | Kubernetes (`kind`)| v1.29+ | Host Docker | Single-node multi-namespace cluster managing 17 operational pods |
 
 ---
@@ -232,7 +233,7 @@ which ip jq curl sqlite3 tshark
 
 ### Step 3 — Select the Verified Golden Baseline
 ```bash
-git checkout phase5.4-golden
+git checkout phase5.5-golden
 ```
 
 ### Step 4 — Initialize Kubernetes Cluster & Start All Core Pods
@@ -273,10 +274,20 @@ sudo bash scripts/test-ims-call.sh all
 * Inter-PLMN roaming call: UE1 (`sip:ue1@ims.lab`) $\leftrightarrow$ UE3 (`sip:ue3@ims.lab` in Bosnia LBO).
 * Bidirectional G.711 PCMU RTP streams are relayed through RTPEngine.
 
-### Step 8 — Collect Offline CDRs & Measure KPIs
+### Step 8 — Rate Usage, Manage Balances & Measure KPIs
 ```bash
-# Query SQLite CDRs and network namespace usage counters
-sudo bash scripts/collect-charging-records.sh
+# Ingest Kamailio SQLite CDRs, rate calls, and debit subscriber accounts
+python3 scripts/rating-engine.py rate-cdrs
+
+# Check subscriber balances
+python3 scripts/rating-engine.py balance acc-ue1
+python3 scripts/rating-engine.py balance acc-ue3
+
+# Run financial reconciliation audit
+python3 scripts/rating-engine.py reconcile
+
+# Generate operator revenue summary
+python3 scripts/rating-engine.py report
 
 # Compute real-time PDD, CST, CSSR, jitter, and G.107 MOS
 sudo bash scripts/measure-kpis.sh
@@ -284,16 +295,19 @@ sudo bash scripts/measure-kpis.sh
 
 ### Step 9 — Execute All Automated Verification Test Suites
 ```bash
-# 1. Prometheus Telemetry Suite (19 Tests)
+# 1. Telecom Rating & Prepaid Balance Suite (22 Tests)
+./scripts/verify-rating.sh
+
+# 2. Prometheus Telemetry Suite (19 Tests)
 ./scripts/verify-observability.sh
 
-# 2. Grafana Operations Dashboard Suite (18 Tests)
+# 3. Grafana Operations Dashboard Suite (18 Tests)
 ./scripts/verify-grafana.sh
 
-# 3. Prometheus Alerting & Fault Injection Suite (19 Tests)
+# 4. Prometheus Alerting & Fault Injection Suite (19 Tests)
 ./scripts/verify-alerting.sh
 
-# 4. Official Core, Multi-PLMN & IMS Regression Suite (91 Tests)
+# 5. Official Core, Multi-PLMN & IMS Regression Suite (91 Tests)
 sudo bash scripts/verify-lab.sh
 ```
 
@@ -464,13 +478,95 @@ The UPF enforces traffic treatment using socket TOS flags paired with Linux `tc 
 
 ---
 
+---
+
+## Telecom Rating & Prepaid Balance Subsystem
+
+Phase 5.5 introduces a deterministic, explainable, and transactional **Laboratory Telecom Rating Engine & Prepaid Balance Management Subsystem** (`src/charging/` and [`scripts/rating-engine.py`](scripts/rating-engine.py)).
+
+> [!IMPORTANT]
+> **Scope Clarification:** This subsystem is an **Offline Usage Rating and Balance Engine** designed for revenue engineering, tariff modeling, and transaction reconciliation using SQLite usage records. It is distinct from a 3GPP Rel-16 production Online Charging System (OCS) or Service-Based Charging Function (CHF / `Nchf`).
+
+### 1. Architectural Flow
+
+```mermaid
+flowchart TD
+    CDR["Kamailio S-CSCF CDR / Netns Data"] --> INGEST["Usage Ingestion (rating-engine.py)"]
+    INGEST --> CLASS["Destination & Service Classifier"]
+    CLASS --> TARIFF["Tariff Selection (configs/charging/tariffs.yaml)"]
+    TARIFF --> RATE["Deterministic Rating Engine (src/charging/rating_engine.py)"]
+    RATE -->|RatedEvent| BAL["Balance Manager (src/charging/balance_manager.py)"]
+    BAL <-->|ACID Transactions| DB[("SQLite Ledger (data/charging.sqlite)")]
+    BAL -->|Metrics| EXP["telecom-exporter (:9100)"]
+    EXP --> PROM["Prometheus (:30090)"]
+    PROM --> GRAF["Grafana Section J (:30300)"]
+```
+
+### 2. Rating & Tariff Model
+
+$$\text{Call Cost} = \text{Setup Fee} + \left( \left\lceil \frac{\max(\text{Duration}, \text{Min Units})}{\text{Granularity}} \right\rceil \times \text{Granularity} \right) \times \frac{\text{Unit Rate}}{\text{Unit Size}}$$
+
+| Tariff ID | Rate Plan | Service | Destination | Setup Fee | Unit Rate | Min Duration | Rounding | Effective Rate |
+| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| **`tariff-domestic-voice`** | `standard-prepaid` | `voice` | `domestic` (602/03 ↔ 602/04) | `0.05 LAB` | `0.02 LAB / s` | 1s | `CEIL` | `1.20 LAB / min` |
+| **`tariff-roaming-voice`** | `standard-prepaid` | `voice` | `roaming_vplmn` (Bosnia 218/90 LBO) | `0.15 LAB` | `0.08 LAB / s` | 1s | `CEIL` | `4.80 LAB / min` |
+| **`tariff-domestic-data-internet`** | `standard-prepaid` | `data` | `domestic` (DNN: `internet`) | `0.00 LAB` | `0.01 LAB / MB`| 1 KB | `CEIL` | `0.01 LAB / MB` |
+| **`tariff-domestic-data-ims`** | `standard-prepaid` | `data` | `domestic` (DNN: `ims`) | `0.00 LAB` | `0.00 LAB / MB`| 1 KB | `CEIL` | **Zero-Rated** Vo5G Bearer |
+| **`tariff-roaming-data-internet`** | `standard-prepaid` | `data` | `roaming_vplmn` (DNN: `internet`)| `0.00 LAB` | `0.05 LAB / MB`| 1 KB | `CEIL` | `0.05 LAB / MB` |
+
+### 3. Prepaid Balance Lifecycle & State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> AVAILABLE: Provision Account / TOPUP
+    AVAILABLE --> RESERVED: reserve_balance(estimated_credit)
+    RESERVED --> AVAILABLE: release_reservation() [Cancelled Session]
+    RESERVED --> CONSUMED: consume_reservation(actual_charge) [Session Completed]
+    CONSUMED --> AVAILABLE: Refund unused reservation delta
+    AVAILABLE --> CONSUMED: debit_account(rated_event) [Direct Offline Rating]
+```
+
+- **Non-Negative Balance Protection:** Automatic rejection if $\text{Available} < \text{Required}$ without modifying account balances.
+- **Idempotency Guarantee:** Re-rating existing CDRs returns existing transaction without double-charging.
+
+### 4. Financial Reconciliation Engine
+
+Formally verifies mathematical consistency across ledger and balances (`python3 scripts/rating-engine.py reconcile`):
+
+$$\sum \text{Ledger Credits} - \sum \text{Ledger Debits} \equiv \text{Balance Available} + \text{Balance Reserved}$$
+
+### 5. Operator CLI Usage ([`scripts/rating-engine.py`](scripts/rating-engine.py))
+
+```bash
+# Initialize schema and seed tariffs
+python3 scripts/rating-engine.py init-db
+
+# Ingest and rate pending Kamailio SQLite CDRs
+python3 scripts/rating-engine.py rate-cdrs
+
+# Check subscriber balance statement
+python3 scripts/rating-engine.py balance acc-ue1
+
+# Top up subscriber account
+python3 scripts/rating-engine.py top-up acc-ue1 20.00 --description "Retail Recharge"
+
+# View full auditable transaction ledger
+python3 scripts/rating-engine.py history acc-ue1
+
+# Run mathematical reconciliation audit
+python3 scripts/rating-engine.py reconcile
+
+# Generate executive revenue summary
+python3 scripts/rating-engine.py report
+```
+
 ## Full-Stack Observability: Prometheus & Grafana
 
 The laboratory incorporates a comprehensive cloud-native observability stack deployed declaratively in the `monitoring` namespace.
 
 ### Live Grafana Operations Dashboard (`http://<NODE_IP>:30300`)
 
-The provisioned **Telecom Operations Overview** dashboard consists of **43 visual panels** structured across 9 operational rows:
+The provisioned **Telecom Operations Overview** dashboard consists of **53 visual panels** structured across 10 operational rows:
 
 ![Grafana Telecom Operations Overview](docs/images/grafana-dashboard-overview.png)
 *Figure 1: Grafana Operations Dashboard — Executive Service Health, Kubernetes Pod Readiness Matrix, and 5G Core Control/User Plane Association States.*
@@ -511,6 +607,10 @@ The provisioned **Telecom Operations Overview** dashboard consists of **43 visua
 ├──────────┼───────────────────────────────────────────┼───────────────────────────────────────────┤
 │ Row I    │ Active Incidents & Telecom Alerting       │ Active Firing Alert Stat Card, Real-Time  │
 │          │                                           │ Alertmanager Incident Table               │
+├──────────┼───────────────────────────────────────────┼───────────────────────────────────────────┤
+│ Row J    │ Rating, Prepaid Balance & Revenue         │ Total Billed Revenue, Available Balance,  │
+│          │ Management                                │ Active Accounts, Rated Events, Reconcile  │
+│          │                                           │ Audit Status, Revenue by PLMN & Service   │
 └──────────┴───────────────────────────────────────────┴───────────────────────────────────────────┘
 ```
 
@@ -520,7 +620,7 @@ The provisioned **Telecom Operations Overview** dashboard consists of **43 visua
 
 Alerts are declaratively defined in [`k8s/monitoring/prometheus-alert-rules.yaml`](k8s/monitoring/prometheus-alert-rules.yaml) and dispatched to **Alertmanager** (`http://<NODE_IP>:30093`):
 
-### Declarative Alert Rule Registry (21 Rules across 6 Groups)
+### Declarative Alert Rule Registry (26 Rules across 7 Groups)
 
 | Alert Rule Name | Severity | Group / Layer | PromQL Trigger Condition | Operational Impact |
 | :--- | :--- | :--- | :--- | :--- |
@@ -545,6 +645,11 @@ Alerts are declaratively defined in [`k8s/monitoring/prometheus-alert-rules.yaml
 | **`RoamingUeDetached`** | `critical` | `telecom_roaming_alerts` | `roaming_ue_attached_status == 0` | Roaming UE3 detached from Visited PLMN |
 | **`RoamingLboUserPlaneDown`**| `critical`| `telecom_roaming_alerts` | `roaming_lbo_user_plane_status == 0` | Visited UPF LBO data path down |
 | **`RoamingSuccessRateLow`** | `critical` | `telecom_roaming_alerts` | `roaming_inter_plmn_success_rate < 99.0` | Roaming call completion rate $< 99\%$ |
+| **`ChargingReconciliationFailed`** | `critical` | `telecom_rating_charging_alerts` | `charging_reconciliation_failures_total > 0` | Mismatch between ledger and balances |
+| **`ChargingBalanceIntegrityFailure`**| `critical` | `telecom_rating_charging_alerts` | `charging_balance_available_total < 0` | Negative available balance detected |
+| **`ChargingActiveAccountsZero`** | `warning` | `telecom_rating_charging_alerts` | `charging_active_accounts == 0` | Zero active subscriber accounts |
+| **`ChargingUnratedUsageHigh`** | `warning` | `telecom_rating_charging_alerts` | `(charging_cdr_records_total - sum(charging_usage_rated_total)) > 50` | Unrated CDR backlog > 50 |
+| **`ChargingInsufficientBalanceSpike`**| `warning`| `telecom_rating_charging_alerts` | `rate(charging_insufficient_balance_total[5m]) > 0.5` | High rate of rejected call attempts |
 
 ### Automated Fault-Injection & Resolution Lifecycle
 
@@ -576,7 +681,7 @@ The KPI engine ([`scripts/measure-kpis.sh`](scripts/measure-kpis.sh)) calculates
 
 ## ✅ Validation & Test Results
 
-The entire laboratory is governed by **four independent automated verification suites** totaling **147 tests (147/147 PASS, 0 Failures, 0 Warnings)**:
+The entire laboratory is governed by **five independent automated verification suites** totaling **169 tests (169/169 PASS, 0 Failures, 0 Warnings)**:
 
 ![Terminal Verification Suite Output](docs/images/verify-lab-output.png)
 *Figure 3: Consolidated Terminal Verification Output — 100% Passing State across All 5GC Core, Multi-PLMN Roaming, IMS, and Observability Test Suites.*
@@ -589,8 +694,9 @@ The entire laboratory is governed by **four independent automated verification s
   2. Observability & Telemetry Suite (verify-observability): 19/19 Passed
   3. Grafana Operations Dashboard Suite (verify-grafana)  : 18/18 Passed
   4. Prometheus Alerting & Incident Suite (verify-alerting): 19/19 Passed
+  5. Rating Engine & Balance Suite (verify-rating.sh)     : 22/22 Passed
 ───────────────────────────────────────────────────────────────────────
-  TOTAL CONSOLIDATED VALIDATION RESULT                   : 147/147 PASS (100%)
+  TOTAL CONSOLIDATED VALIDATION RESULT                   : 169/169 PASS (100%)
 ═══════════════════════════════════════════════════════════════════════
 ```
 
@@ -697,21 +803,21 @@ To maintain technical clarity and avoid exaggerated claims, the boundaries of th
 The project repository strictly follows tagged golden milestones representing validated development baselines:
 
 ```
-  v1.0.0              phase3-final         phase4-golden        phase5.3-golden      phase5.4-golden (HEAD)
+  v1.0.0              phase3-final         phase4-golden        phase5.4-golden      phase5.5-golden (HEAD)
     │                      │                     │                     │                     │
     ▼                      ▼                     ▼                     ▼                     ▼
 ┌─────────┐          ┌───────────┐         ┌───────────┐         ┌───────────┐         ┌───────────┐
-│ Phase 1 │─────────►│  Phase 3  │────────►│  Phase 4  │────────►│ Phase 5.3 │────────►│ Phase 5.4 │
+│ Phase 1 │─────────►│  Phase 3  │────────►│  Phase 4  │────────►│ Phase 5.4 │────────►│ Phase 5.5 │
 └─────────┘          └───────────┘         └───────────┘         └───────────┘         └───────────┘
- 5G SA Core           IMS Voice &           5G QoS, tc            Grafana Ops           Prometheus
- Foundation           Multi-PLMN            DiffServ,             Dashboard             Alertmanager,
- & Basic Data         LBO Roaming           SQLite CDRs,          (30300), 43           21 Alert Rules,
-                                            Real KPIs             Panels (A–I)          Fault Injection
+ 5G SA Core           IMS Voice &           5G QoS, tc            Prometheus            Telecom Rating,
+ Foundation           Multi-PLMN            DiffServ,             Alertmanager,         Prepaid Balance,
+ & Basic Data         LBO Roaming           SQLite CDRs,          26 Alert Rules,       ACID Ledger &
+                                            Real KPIs             Grafana (A-I)         169 Tests (A-J)
 ```
 
 - **`phase4-golden` (`6e86a69`):** Golden baseline for 5G SA Core, isolated Home/Visited RAN, multi-PLMN LBO roaming, SIP Digest authentication, domestic/roaming voice, bidirectional RTP, DiffServ `tc` queueing, SQLite CDR accounting, and 91/91 regression validation.
-- **`phase5.3-golden` (`41acddd`):** Deployed Grafana (`:30300`) with auto-provisioned Prometheus datasource and 40-panel operations dashboard across Sections A through H.
-- **`phase5.4-golden` (`0c0176d` — Current Golden Baseline):** Deployed Alertmanager (`:30093`), provisioned 21 declarative alert rules across 6 groups, added Section I Incident monitoring in Grafana, and established automated fault-injection validation (147/147 PASS).
+- **`phase5.4-golden` (`0c0176d`):** Deployed Alertmanager (`:30093`), provisioned declarative alert rules across 6 groups, added Section I Incident monitoring in Grafana, and established automated fault-injection validation.
+- **`phase5.5-golden` (Current Golden Baseline):** Deployed Telecom Rating Engine, Prepaid Balance Manager, ACID SQLite Ledger, Multi-Point Financial Reconciliation, Section J Revenue Dashboard in Grafana (53 panels), 26 Alertmanager rules, and 22-test automated rating regression suite (**169 / 169 Tests PASS**).
 
 ---
 
@@ -727,6 +833,10 @@ The project repository strictly follows tagged golden milestones representing va
 │   └── images/
 │       └── banner.png                 # Project banner visual
 ├── configs/
+│   ├── charging/                      # Declarative Phase 5.5 rating & tariff configurations
+│   │   ├── accounts.yaml              # Subscriber accounts, seed balances, and rate plans
+│   │   ├── rate-plans.yaml            # Standard and premium roaming rate plan definitions
+│   │   └── tariffs.yaml               # Voice and data tariff rules and rounding policies
 │   ├── ueransim/                      # UERANSIM isolated gNodeB and UE configs
 │   │   ├── open5gs-gnb-home.yaml      # gNodeB-Home (PLMNs 602/03, 602/04 -> HAMF :38412)
 │   │   ├── open5gs-gnb-visited.yaml   # gNodeB-Visited (VPLMN 218/90 -> VAMF :38413)
@@ -738,6 +848,14 @@ The project repository strictly follows tagged golden milestones representing va
 │   ├── architecture/
 │   │   ├── README.md
 │   │   └── home-vs-visited-ran.md     # RAN separation & LBO user-plane engineering note
+│   ├── charging/                      # Phase 5.5 Telecom Rating & Balance Documentation
+│   │   ├── architecture.md            # Subsystem architecture & layer specifications
+│   │   ├── rating-model.md            # Voice & data rating formulas and tariff models
+│   │   ├── balance-management.md      # Prepaid balance lifecycle & reservation state machine
+│   │   ├── data-model.md              # SQLite database schema, ER diagrams & indexes
+│   │   ├── reconciliation.md          # Multi-point financial reconciliation framework
+│   │   ├── operations.md              # Operator CLI manual & command reference
+│   │   └── testing.md                 # 22-test automated regression suite specification
 │   ├── engineering-notes/
 │   │   ├── phase4-qos-charging-assurance.md # Phase 4 technical architecture
 │   │   ├── linux-networking-behind-5g.md    # Kernel routing, netns, and TUN plumbing
@@ -750,6 +868,14 @@ The project repository strictly follows tagged golden milestones representing va
 │   │   ├── grafana-operations-dashboard.md  # Grafana dashboard panels and PromQL
 │   │   └── alerting.md                      # Prometheus alerting rules and incident runbooks
 │   └── images/                        # Architectural and verification diagrams
+├── src/
+│   └── charging/                      # Telecom Rating & Balance Python Package
+│       ├── __init__.py                # Package exports
+│       ├── models.py                  # Dataclasses (Account, Tariff, RatedEvent, Tx)
+│       ├── database.py                # ACID SQLite manager, schema migrations, WAL mode
+│       ├── rating_engine.py           # Deterministic rating & destination classification
+│       ├── balance_manager.py         # Multi-bucket balance lifecycle & transaction journal
+│       └── reconciliation.py          # Financial consistency & idempotency auditor
 ├── k8s/
 │   ├── kind-config.yaml               # Kubernetes kind cluster configuration
 │   ├── namespace.yaml                 # 5G Core namespace (`open5gs`)
@@ -783,10 +909,12 @@ The project repository strictly follows tagged golden milestones representing va
     ├── validate-ims-call.sh           # Validates SIP dialogs, RTP packets, and PCAP
     ├── collect-charging-records.sh    # Queries SQLite CDRs and netns data counters
     ├── measure-kpis.sh                # Measures PDD, CST, CSSR, jitter, and MOS
+    ├── rating-engine.py               # Phase 5.5 Telecom Rating & Balance CLI Utility
     ├── telecom-exporter.py            # 7-domain Prometheus OpenMetrics exporter
     ├── verify-observability.sh        # Phase 5.2 Prometheus telemetry test suite (19 tests)
     ├── verify-grafana.sh              # Phase 5.3 Grafana dashboard test suite (18 tests)
     ├── verify-alerting.sh             # Phase 5.4 Alertmanager incident suite (19 tests)
+    ├── verify-rating.sh               # Phase 5.5 Telecom Rating & Balance test suite (22 tests)
     └── verify-lab.sh                  # Official 91-test regression verification suite
 ```
 
@@ -794,7 +922,7 @@ The project repository strictly follows tagged golden milestones representing va
 
 ## Future Roadmap
 
-- [ ] **Phase 5.5:** Telecom Rating Engine & Balance Management (prepaid/postpaid rating logic using SQLite CDRs).
+- [x] **Phase 5.5:** Telecom Rating Engine & Balance Management (prepaid/postpaid rating logic, ACID ledger, reconciliation, 22 automated tests) — **COMPLETED & GOLDEN**.
 - [ ] **Phase 5.6:** Automated Self-Healing & Closed-Loop Remediation (Kubernetes Operator for auto-restarting degraded NFs).
 - [ ] **Phase 5.7:** Automated CI/CD Pipeline (GitHub Actions automated syntax, linting, and regression validation).
 - [ ] **Phase 6.0:** Cloud-Native 5G Core Upgrade (Open5GS v2.9+ / 3GPP Rel-17 capabilities).
