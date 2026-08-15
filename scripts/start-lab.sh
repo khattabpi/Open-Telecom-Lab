@@ -176,13 +176,12 @@ print_status() {
   log "UPF PFCP  (UDP N4):          ${NODE_IP}:8805"
   log "P-CSCF SIP (UDP/TCP):        10.46.0.1:5060"
   echo
-  log "To start RAN simulation:"
-  echo "    bash scripts/run-gnb.sh"
-  echo "    sudo bash scripts/run-ue.sh 1"
-  echo "    sudo bash scripts/run-ue.sh 2"
+  log "To start RAN simulation (Isolated Home & Visited gNodeBs):"
+  echo "    sudo bash scripts/run-gnb.sh all"
+  echo "    sudo bash scripts/run-ue.sh all"
   echo
-  log "To test end-to-end IMS SIP call & RTP voice stream:"
-  echo "    sudo bash scripts/test-ims-call.sh"
+  log "To test end-to-end IMS SIP calls & RTP voice streams:"
+  echo "    sudo bash scripts/test-ims-call.sh all"
   echo
   log "To verify full end-to-end lab health:"
   echo "    sudo bash scripts/verify-lab.sh"

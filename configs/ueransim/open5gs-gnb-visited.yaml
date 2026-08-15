@@ -1,0 +1,35 @@
+# UERANSIM gNodeB Configuration for Bosnia Visited Network (VPLMN 218/90)
+# Open Telecom Lab — Isolated Visited RAN
+# Reference: 3GPP TS 38.413 / TS 23.501
+
+# PLMN Identity
+mcc: '218'
+mnc: '90'
+
+# Supported PLMNs (Visited PLMN ONLY — 602/03 and 602/04 are NOT present)
+plmnList:
+  - mcc: '218'
+    mnc: '90'
+
+# NR Cell Identity (Visited Cell)
+nci: '0x000000020'
+idLength: 32
+tac: 1
+
+# Transport Layer Addresses
+linkIp: 127.0.0.2     # gNB local bind for simulated radio link (Visited UE search list)
+ngapIp: 172.19.0.3     # N2 interface (SCTP source on host kind bridge)
+gtpIp: 172.19.0.3      # N3 interface (GTP-U endpoint for VUPF downlink)
+
+# AMF Configuration (Visited AMF ONLY — No association with HAMF)
+amfConfigs:
+  - address: 172.19.0.2
+    port: 38413          # SCTP port for Visited AMF (VPLMN 218/90)
+
+# Network Slice Support
+slices:
+  - sst: 1              # eMBB (Enhanced Mobile Broadband)
+    sd: 0xffffff         # Default Slice Differentiator
+
+# Stream handling
+ignoreStreamIds: true

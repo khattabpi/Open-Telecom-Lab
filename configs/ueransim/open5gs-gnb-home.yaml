@@ -1,36 +1,32 @@
-# UERANSIM gNodeB Configuration for Open5GS
-# Open Telecom Lab — v3.0 (Kubernetes / Kind & Host Networking)
-# Reference: UERANSIM Wiki + 3GPP TS 38.413
+# UERANSIM gNodeB Configuration for Egypt Home Network (HPLMN 602/03, 602/04)
+# Open Telecom Lab — Isolated Home RAN
+# Reference: 3GPP TS 38.413 / TS 23.501
 
 # PLMN Identity
 mcc: '602'
 mnc: '03'
 
-# Supported PLMNs (Multi-PLMN / RAN Sharing)
+# Supported PLMNs (Home PLMNs ONLY — 218/90 is NOT present)
 plmnList:
   - mcc: '602'
     mnc: '03'
   - mcc: '602'
     mnc: '04'
-  - mcc: '218'
-    mnc: '90'
 
-# NR Cell Identity
+# NR Cell Identity (Home Cell)
 nci: '0x000000010'
 idLength: 32
 tac: 1
 
 # Transport Layer Addresses
-linkIp: 127.0.0.1     # gNB local bind for simulated radio link (UE search list)
+linkIp: 127.0.0.1     # gNB local bind for simulated radio link (Home UE search list)
 ngapIp: 172.19.0.1     # N2 interface (SCTP source on host kind bridge)
 gtpIp: 172.19.0.1      # N3 interface (GTP-U endpoint for UPF downlink)
 
-# AMF Configuration (Target kind control-plane node IP)
+# AMF Configuration (Home AMF ONLY — No association with VAMF)
 amfConfigs:
   - address: 172.19.0.2
-    port: 38412          # SCTP port for Home AMF (602/03, 602/04)
-  - address: 172.19.0.2
-    port: 38413          # SCTP port for Visited AMF (218/90)
+    port: 38412          # SCTP port for Home AMF (PLMNs 602/03, 602/04)
 
 # Network Slice Support
 slices:
