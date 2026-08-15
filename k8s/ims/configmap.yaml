@@ -22,6 +22,52 @@ data:
         rpid VARCHAR(128) DEFAULT NULL,
         CONSTRAINT account_idx UNIQUE (username, domain)
     )''')
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS acc (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        method VARCHAR(16) DEFAULT '' NOT NULL,
+        from_tag VARCHAR(128) DEFAULT '' NOT NULL,
+        to_tag VARCHAR(128) DEFAULT '' NOT NULL,
+        callid VARCHAR(255) DEFAULT '' NOT NULL,
+        sip_code VARCHAR(3) DEFAULT '' NOT NULL,
+        sip_reason VARCHAR(128) DEFAULT '' NOT NULL,
+        time DATETIME NOT NULL,
+        caller VARCHAR(128) DEFAULT '' NOT NULL,
+        callee VARCHAR(128) DEFAULT '' NOT NULL,
+        src_ip VARCHAR(64) DEFAULT '' NOT NULL,
+        dst_ip VARCHAR(64) DEFAULT '' NOT NULL
+    )''')
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS missed_calls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        method VARCHAR(16) DEFAULT '' NOT NULL,
+        from_tag VARCHAR(128) DEFAULT '' NOT NULL,
+        to_tag VARCHAR(128) DEFAULT '' NOT NULL,
+        callid VARCHAR(255) DEFAULT '' NOT NULL,
+        sip_code VARCHAR(3) DEFAULT '' NOT NULL,
+        sip_reason VARCHAR(128) DEFAULT '' NOT NULL,
+        time DATETIME NOT NULL,
+        caller VARCHAR(128) DEFAULT '' NOT NULL,
+        callee VARCHAR(128) DEFAULT '' NOT NULL,
+        src_ip VARCHAR(64) DEFAULT '' NOT NULL,
+        dst_ip VARCHAR(64) DEFAULT '' NOT NULL
+    )''')
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS cdrs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        callid VARCHAR(255) DEFAULT '' NOT NULL,
+        caller VARCHAR(128) DEFAULT '' NOT NULL,
+        callee VARCHAR(128) DEFAULT '' NOT NULL,
+        from_tag VARCHAR(128) DEFAULT '' NOT NULL,
+        to_tag VARCHAR(128) DEFAULT '' NOT NULL,
+        start_time VARCHAR(32) DEFAULT '' NOT NULL,
+        end_time VARCHAR(32) DEFAULT '' NOT NULL,
+        duration INTEGER DEFAULT 0 NOT NULL,
+        sip_code VARCHAR(3) DEFAULT '200' NOT NULL,
+        sip_reason VARCHAR(128) DEFAULT 'OK' NOT NULL,
+        src_ip VARCHAR(64) DEFAULT '' NOT NULL,
+        call_type VARCHAR(32) DEFAULT 'Vo5G-SIP' NOT NULL
+    )''')
     subscribers = [
         ("ue1", "ims.lab", "password123"),
         ("602030000000001", "ims.lab", "password123"),
@@ -37,7 +83,7 @@ data:
         cur.execute("INSERT OR REPLACE INTO subscriber (username, domain, password) VALUES (?, ?, ?)", (u, d, p))
     con.commit()
     con.close()
-    print("[✓] SQLite subscriber database initialized at", db_path)
+    print("[✓] SQLite subscriber and CDR accounting database initialized at", db_path)
 
   pcscf.cfg: |
     #!KAMAILIO
@@ -251,7 +297,7 @@ data:
     alias="kamailio-scscf"
     alias="kamailio-scscf.ims.svc.cluster.local"
 
-    # Module Loading Order: tm before sl/rr/path
+    # Module Loading Order: tm before sl/rr/path/dialog/acc
     loadmodule "tm.so"
     loadmodule "sl.so"
     loadmodule "rr.so"
@@ -267,6 +313,9 @@ data:
     loadmodule "auth.so"
     loadmodule "auth_db.so"
     loadmodule "db_sqlite.so"
+    loadmodule "sqlops.so"
+    loadmodule "dialog.so"
+    loadmodule "acc.so"
     loadmodule "ctl.so"
     loadmodule "jsonrpcs.so"
 
@@ -279,6 +328,22 @@ data:
     modparam("auth_db", "password_column", "password")
     modparam("auth_db", "user_column", "username")
     modparam("auth_db", "domain_column", "domain")
+
+    # Phase 4C: Dialog Tracking, ACC & SQLite CDR Accounting
+    modparam("sqlops", "sqlcon", "cb=>sqlite:///etc/kamailio/db/kamailio.sqlite")
+    modparam("dialog", "db_mode", 0)
+    modparam("dialog", "enable_stats", 1)
+    modparam("dialog", "dlg_flag", 4)
+
+    modparam("acc", "db_url", "sqlite:///etc/kamailio/db/kamailio.sqlite")
+    modparam("acc", "db_flag", 1)
+    modparam("acc", "db_missed_flag", 2)
+    modparam("acc", "db_table_acc", "acc")
+    modparam("acc", "db_table_missed_calls", "missed_calls")
+    modparam("acc", "time_mode", 1)
+    modparam("acc", "db_extra", "caller=$fu; callee=$ru; src_ip=$si; dst_ip=$du")
+    modparam("acc", "cdr_enable", 1)
+    modparam("acc", "cdrs_table", "acc_cdrs")
 
     request_route {
         force_rport();
@@ -300,6 +365,14 @@ data:
 
         # In-dialog requests
         if (has_totag()) {
+            dlg_manage();
+            if (is_method("BYE")) {
+                setflag(1);
+                $var(duration) = $TS - $dlg_var(start_ts);
+                sql_query("cb", "INSERT INTO cdrs (callid, caller, callee, from_tag, to_tag, start_time, end_time, duration, sip_code, sip_reason, src_ip, call_type) VALUES ('$dlg_var(callid)', '$dlg_var(caller)', '$dlg_var(callee)', '$dlg_var(from_tag)', '$tt', datetime($dlg_var(start_ts), 'unixepoch', 'localtime'), datetime('now', 'localtime'), $var(duration), '200', 'OK', '$si', 'Vo5G-SIP')", "ra");
+                sql_result_free("ra");
+                xlog("L_INFO", "S-CSCF: Recorded CDR into SQLite for call $dlg_var(callid) (Duration: $var(duration)s)\n");
+            }
             if (loose_route()) {
                 record_route_preset("kamailio-scscf.ims.svc.cluster.local:5060");
                 t_relay();
@@ -338,7 +411,18 @@ data:
 
         # Initial INVITE handling
         if (is_method("INVITE")) {
-            xlog("L_INFO", "S-CSCF: Processing INVITE from $fu to $ru (Target User: $rU)\n");
+            setflag(1);
+            setflag(2);
+            setflag(4);
+            dlg_manage();
+            $dlg_var(caller) = $fu;
+            $dlg_var(callee) = $ru;
+            $dlg_var(callid) = $ci;
+            $dlg_var(from_tag) = $ft;
+            $dlg_var(src_ip) = $si;
+            $dlg_var(start_ts) = $TS;
+
+            xlog("L_INFO", "S-CSCF: Processing INVITE from $fu to $ru (Target User: $rU, Call-ID: $ci)\n");
             record_route_preset("kamailio-scscf.ims.svc.cluster.local:5060");
             
             # Lookup terminating subscriber location

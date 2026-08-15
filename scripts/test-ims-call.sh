@@ -70,6 +70,7 @@ def make_digest(u, p, r, n, uri, m):
     return f'Digest username="{{u}}", realm="{{r}}", nonce="{{n}}", uri="{{uri}}", response="{{resp}}", algorithm=MD5'
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, 0xA0)  # CS5 (0xA0 / DSCP 40) - 3GPP 5QI 5 IMS Signaling
 s.bind(('{ip}', {SIP_PORT}))
 s.settimeout(4.0)
 
@@ -141,10 +142,12 @@ def run_call(caller_key, callee_key):
     callee_script = f"""import socket, re, time, threading, sys
 try:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, 0xA0)  # CS5 (0xA0 / DSCP 40) - 3GPP 5QI 5 IMS Signaling
     s.bind(('{callee_ip}', {SIP_PORT}))
     s.settimeout(12.0)
 
     rtp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    rtp_sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, 0xB8)  # EF (0xB8 / DSCP 46) - 3GPP 5QI 1 Conversational Voice
     rtp_sock.bind(('{callee_ip}', {RTP_PORT}))
     rtp_sock.settimeout(8.0)
 
@@ -253,10 +256,12 @@ except Exception as e:
     caller_script = f"""import socket, re, time, threading, sys
 try:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, 0xA0)  # CS5 (0xA0 / DSCP 40) - 3GPP 5QI 5 IMS Signaling
     s.bind(('{caller_ip}', {SIP_PORT}))
     s.settimeout(8.0)
 
     rtp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    rtp_sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, 0xB8)  # EF (0xB8 / DSCP 46) - 3GPP 5QI 1 Conversational Voice
     rtp_sock.bind(('{caller_ip}', {RTP_PORT}))
     rtp_sock.settimeout(8.0)
 

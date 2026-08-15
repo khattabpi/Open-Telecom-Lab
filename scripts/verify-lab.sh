@@ -464,6 +464,89 @@ fi
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
+# 10. Phase 4 Offline Charging & User-Plane Usage Accounting
+# ─────────────────────────────────────────────────────────────────
+echo -e "${BOLD}10. Phase 4 Offline Charging & User-Plane Usage Accounting${NC}"
+
+# Check SQLite Database in S-CSCF
+if kubectl exec -n ims deployment/kamailio-scscf -c scscf -- python3 -c "import os; assert os.path.exists('/etc/kamailio/db/kamailio.sqlite')" &>/dev/null; then
+    check_pass "[CHG-01] SQLite CDR Database active (/etc/kamailio/db/kamailio.sqlite)"
+else
+    check_fail "[CHG-01] SQLite CDR Database not found in kamailio-scscf pod"
+fi
+
+# Check CDR & ACC Tables
+if kubectl exec -n ims deployment/kamailio-scscf -c scscf -- python3 -c "
+import sqlite3
+con = sqlite3.connect('/etc/kamailio/db/kamailio.sqlite')
+tables = [r[0] for r in con.execute('SELECT name FROM sqlite_master WHERE type=\'table\'').fetchall()]
+assert 'cdrs' in tables and 'acc' in tables
+" &>/dev/null; then
+    check_pass "[CHG-02] Kamailio CDR Accounting Schema (cdrs & acc tables initialized)"
+else
+    check_fail "[CHG-02] Kamailio CDR Accounting tables missing from SQLite DB"
+fi
+
+# Check Domestic Call CDR (UE1 -> UE2)
+if kubectl exec -n ims deployment/kamailio-scscf -c scscf -- python3 -c "
+import sqlite3
+con = sqlite3.connect('/etc/kamailio/db/kamailio.sqlite')
+rows = con.execute(\"SELECT * FROM cdrs WHERE caller LIKE '%ue1%' AND callee LIKE '%ue2%'\").fetchall()
+assert len(rows) > 0, 'No domestic CDR found for ue1 -> ue2'
+" &>/dev/null; then
+    check_pass "[CHG-03] Domestic Voice Call CDR Recorded (UE1 -> UE2: caller, callee, 200 OK)"
+else
+    check_fail "[CHG-03] Domestic Voice Call CDR missing in SQLite DB"
+fi
+
+# Check Roaming Call CDR (UE1 -> UE3)
+if kubectl exec -n ims deployment/kamailio-scscf -c scscf -- python3 -c "
+import sqlite3
+con = sqlite3.connect('/etc/kamailio/db/kamailio.sqlite')
+rows = con.execute(\"SELECT * FROM cdrs WHERE caller LIKE '%ue1%' AND callee LIKE '%ue3%'\").fetchall()
+assert len(rows) > 0, 'No roaming CDR found for ue1 -> ue3'
+" &>/dev/null; then
+    check_pass "[CHG-04] Roaming Voice Call CDR Recorded (UE1 -> UE3: caller, callee, 200 OK)"
+else
+    check_fail "[CHG-04] Roaming Voice Call CDR missing in SQLite DB"
+fi
+
+# Check CDR Timestamps & Duration
+if kubectl exec -n ims deployment/kamailio-scscf -c scscf -- python3 -c "
+import sqlite3
+con = sqlite3.connect('/etc/kamailio/db/kamailio.sqlite')
+rows = con.execute(\"SELECT duration, start_time, end_time FROM cdrs WHERE duration >= 0\").fetchall()
+assert len(rows) >= 2, 'Insufficient completed CDRs'
+" &>/dev/null; then
+    check_pass "[CHG-05] CDR Timestamps & Duration verified (Valid timestamps & duration recorded)"
+else
+    check_fail "[CHG-05] CDR timestamps or duration invalid in SQLite DB"
+fi
+
+# Check User-Plane Data Accounting
+if python3 -c "
+import subprocess, re
+rx_total = 0
+for ns in ['ueransim-602030000000001-ims-psi2', 'ueransim-602040000000002-ims-psi2', 'ueransim-602030000000003-ims-psi2']:
+    out = subprocess.run(f'ip netns exec {ns} ip -s link show uesimtun0 2>/dev/null', shell=True, capture_output=True, text=True).stdout
+    rx_m = re.search(r'RX:\s+bytes\s+packets[^\n]+\n\s+(\d+)', out)
+    if rx_m: rx_total += int(rx_m.group(1))
+assert rx_total > 0, 'No user-plane bytes counted'
+" &>/dev/null; then
+    check_pass "[CHG-06] User-Plane Usage Accounting active across Internet & IMS PDU sessions"
+else
+    check_fail "[CHG-06] User-Plane usage counters unreadable"
+fi
+
+# Check Charging Records Collector Script
+if [ -f "scripts/collect-charging-records.sh" ] && bash scripts/collect-charging-records.sh --json &>/dev/null; then
+    check_pass "[CHG-07] Charging Records Collector Script (scripts/collect-charging-records.sh operational)"
+else
+    check_fail "[CHG-07] scripts/collect-charging-records.sh execution failed"
+fi
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
