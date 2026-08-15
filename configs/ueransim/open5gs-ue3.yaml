@@ -43,9 +43,9 @@ tunNetmask: '255.255.0.0'
 useNamespace: true
 nsNamePrefix: 'ueransim'
 
-# ─── RAN Connection ────────────────────────────────────────────
+# ─── RAN Connection (Attach to gNodeB-Visited ONLY) ────────────
 gnbSearchList:
-  - 127.0.0.1
+  - 127.0.0.2
 
 # ─── UAC Configuration ─────────────────────────────────────────
 uacAic:

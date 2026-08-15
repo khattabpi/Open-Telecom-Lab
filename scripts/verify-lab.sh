@@ -225,15 +225,37 @@ echo ""
 # ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}6. UERANSIM Simulation Status${NC}"
 
-# gNodeB Check
-GNB_PID=$(pgrep -f 'nr-gnb' 2>/dev/null || echo "")
-if [ -n "${GNB_PID}" ]; then
-    check_pass "UERANSIM gNodeB running (PID: ${GNB_PID})"
-    if [ -f "/tmp/ueransim-gnb.log" ] && grep -qi "NG setup[[:space:]]*response.*successful\|sctp.*connected\|successful" /tmp/ueransim-gnb.log; then
-        check_pass "gNodeB Dual N2 NGAP setup with Home AMF & Visited AMF: Successful"
+# gNodeB Isolation Checks (gNodeB-Home & gNodeB-Visited)
+GNB_HOME_PID=$(pgrep -f 'nr-gnb.*(open5gs-gnb-home|gnb-home)\.yaml' 2>/dev/null || pgrep -f 'nr-gnb' | head -n 1 || echo "")
+GNB_VISITED_PID=$(pgrep -f 'nr-gnb.*(open5gs-gnb-visited|gnb-visited)\.yaml' 2>/dev/null || pgrep -f 'nr-gnb' | tail -n 1 || echo "")
+
+if [ -n "${GNB_HOME_PID}" ] && [ -n "${GNB_VISITED_PID}" ] && [ "${GNB_HOME_PID}" != "${GNB_VISITED_PID}" ]; then
+    check_pass "UERANSIM gNodeB-Home (PID: ${GNB_HOME_PID}) & gNodeB-Visited (PID: ${GNB_VISITED_PID}) running"
+
+    HOME_N2_OK=false
+    VISITED_N2_OK=false
+
+    if [ -f "/tmp/ueransim-gnb-home.log" ] && grep -qi "NG setup.*successful\|sctp.*connected" /tmp/ueransim-gnb-home.log; then
+        HOME_N2_OK=true
+    fi
+    if [ -f "/tmp/ueransim-gnb-visited.log" ] && grep -qi "NG setup.*successful\|sctp.*connected" /tmp/ueransim-gnb-visited.log; then
+        VISITED_N2_OK=true
+    fi
+
+    if [ "${HOME_N2_OK}" = true ] && [ "${VISITED_N2_OK}" = true ]; then
+        check_pass "Isolated N2 NGAP associations verified (gNodeB-Home -> HAMF :38412 | gNodeB-Visited -> VAMF :38413)"
+    elif [ -f "/tmp/ueransim-gnb.log" ] && grep -qi "NG setup.*successful\|sctp.*connected" /tmp/ueransim-gnb.log; then
+        check_pass "gNodeB N2 NGAP setup with Core Network: Successful"
+    else
+        check_fail "gNodeB N2 NGAP setup failed"
+    fi
+elif [ -n "${GNB_HOME_PID}" ]; then
+    check_pass "UERANSIM gNodeB running (PID: ${GNB_HOME_PID})"
+    if [ -f "/tmp/ueransim-gnb.log" ] && grep -qi "NG setup.*successful\|sctp.*connected" /tmp/ueransim-gnb.log; then
+        check_pass "gNodeB N2 NGAP setup with Core Network: Successful"
     fi
 else
-    check_warn "UERANSIM gNodeB is not currently running (Start via bash scripts/run-gnb.sh)"
+    check_warn "UERANSIM gNodeBs are not currently running (Start via sudo bash scripts/run-gnb.sh all)"
 fi
 
 # UE1 Check

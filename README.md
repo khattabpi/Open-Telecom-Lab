@@ -1,6 +1,6 @@
 # 5G-IMS-Lab
 
-A 5G Standalone (5G SA) + IMS research and validation laboratory validating multi-UE operation, multi-PLMN roaming, SIP voice, QoS classification, policy control, offline charging, and service-assurance KPIs using Open5GS, UERANSIM, Kamailio, and RTPEngine.
+A 5G Standalone (5G SA) + IMS research and validation laboratory validating multi-UE operation, multi-PLMN roaming with isolated Home/Visited RAN, SIP voice, QoS classification, policy control, offline charging, and service-assurance KPIs using Open5GS, UERANSIM, Kamailio, and RTPEngine.
 
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-kind-326CE5?logo=kubernetes&logoColor=white)
 ![Open5GS](https://img.shields.io/badge/5G%20Core-Open5GS%20v2.8.0-blue)
@@ -28,7 +28,7 @@ This is a **research and validation laboratory**. It is not a production carrier
 
 ## Architecture
 
-The 5G Core runs inside Kubernetes (`kind`), while the UERANSIM gNodeB and UE processes run on the host. The user plane utilizes real GTP-U packet paths. End-to-end connectivity is validated from the actual UE Linux network namespaces, not merely by checking Kubernetes pod reachability.
+The 5G Core runs inside Kubernetes (`kind`), while the UERANSIM gNodeB and UE processes run on the host. The laboratory isolates the Home (Egypt) and Visited (Bosnia) radio domains using two independent UERANSIM gNodeB processes, each maintaining dedicated N2 SCTP and N3 GTP-U interfaces.
 
 ```mermaid
 flowchart TB
@@ -39,8 +39,12 @@ flowchart TB
         UE3["UE3 — Roaming (HPLMN 602/03 / VPLMN 218/90)<br/>Internet: 10.45.0.10x | IMS: 10.46.0.10x<br/>SIP: sip:ue3@ims.lab"]
     end
 
-    subgraph RAN["Radio Access Network (UERANSIM Multi-PLMN)"]
-        GNB["Shared gNodeB (nr-gnb)<br/>Broadcasts: 602/03, 602/04, 218/90<br/>Dual N2 SCTP Connections"]
+    subgraph RAN_HOME["Home RAN (Egypt)"]
+        GNB_HOME["gNodeB-Home (gnb-home.yaml)<br/>PLMNs: 602/03, 602/04<br/>N2 SCTP :38412 ONLY"]
+    end
+
+    subgraph RAN_VISITED["Visited RAN (Bosnia)"]
+        GNB_VISITED["gNodeB-Visited (gnb-visited.yaml)<br/>PLMN: 218/90 ONLY<br/>N2 SCTP :38413 ONLY"]
     end
 
     subgraph EGYPT_HPLMN["Egypt Home Network (HPLMN 602/03, 602/04)"]
@@ -50,6 +54,7 @@ flowchart TB
         HAUSF["Home AUSF<br/>5G-AKA Authority"]
         HUDM["Home UDM / UDR"]
         HPCF["Home PCF / BSF<br/>SBI Policy Control"]
+        HUPF["Home UPF (ogstun)<br/>10.45.0.1 / 10.46.0.1"]
         HMONGO[("MongoDB<br/>Master DB")]
     end
 
@@ -69,13 +74,15 @@ flowchart TB
         SQLDB[("SQLite CDR DB<br/>kamailio.sqlite")]
     end
 
-    UE1 --> GNB
-    UE2 --> GNB
-    UE3 --> GNB
+    UE1 -->|"Radio (127.0.0.1)"| GNB_HOME
+    UE2 -->|"Radio (127.0.0.1)"| GNB_HOME
+    UE3 -->|"Radio (127.0.0.2)"| GNB_VISITED
 
-    GNB -->|"N2 Home (SCTP :38412)"| HAMF
-    GNB -->|"N2 Visited (SCTP :38413)"| VAMF
-    GNB -->|"N3 User Plane (:2152)"| VUPF
+    GNB_HOME -->|"N2 Home (SCTP :38412)"| HAMF
+    GNB_VISITED -->|"N2 Visited (SCTP :38413)"| VAMF
+
+    GNB_HOME -->|"N3 User Plane (172.19.0.1)"| HUPF
+    GNB_VISITED -->|"N3 User Plane (172.19.0.3)"| VUPF
 
     HAMF --- HAUSF
     VAMF -->|"Nausf_UEAuth"| HAUSF
@@ -87,7 +94,7 @@ flowchart TB
     VAMF --- VSMF
     HSMF ---|"Npcf_SMPolicyControl"| HPCF
     VSMF ---|"Npcf_SMPolicyControl"| HPCF
-    HSMF -->|"N4"| VUPF
+    HSMF -->|"N4"| HUPF
     VSMF -->|"N4"| VUPF
 
     VUPF -->|"IMS PDU Bearer (10.46.0.1)"| PCSCF
@@ -151,13 +158,18 @@ IP addresses are dynamically allocated by Open5GS SMF from designated pool range
 
 ## Multi-PLMN & Roaming
 
-The lab models three PLMN scenarios across three simulated UEs. UE3 operates in an inter-PLMN roaming scenario (HPLMN `602/03`, VPLMN `218/90`).
+The laboratory models an isolated Home/Visited RAN topology for inter-PLMN Local Breakout (LBO) roaming:
 
-The roaming implementation uses **Local Breakout (LBO)** at the visited UPF:
-1. Visited AMF receives the initial NAS registration over N2 SCTP port 38413.
-2. Cross-PLMN 5G-AKA authentication is executed toward Home AUSF via N12 `Nausf_UEAuthentication`.
-3. Visited SMF and Visited UPF allocate local user-plane IP addresses and handle breakout.
-4. Roaming UE3 registers directly to Home IMS (`sip:ue3@ims.lab`) over the visited IMS PDU bearer.
+- **Home RAN (`gNodeB-Home`):** Broadcasts PLMNs `602/03` and `602/04`, establishing N2 SCTP connectivity exclusively with Home AMF (`:38412`). Serves domestic subscribers UE1 and UE2.
+- **Visited RAN (`gNodeB-Visited`):** Broadcasts VPLMN `218/90` only, establishing N2 SCTP connectivity exclusively with Visited AMF (`:38413`). Serves roaming subscriber UE3.
+
+UE3 operates in an inter-PLMN roaming scenario (HPLMN `602/03`, VPLMN `218/90`):
+1. UE3 attaches exclusively through `gNodeB-Visited` on simulated radio link `127.0.0.2`.
+2. Visited AMF receives the initial NAS registration over N2 SCTP port 38413.
+3. Cross-PLMN 5G-AKA authentication is executed toward Home AUSF via N12 `Nausf_UEAuthentication`.
+4. Visited SMF and Visited UPF allocate local user-plane IP addresses and handle Local Breakout (LBO).
+5. User-plane N3 GTP-U packets flow directly between `gNodeB-Visited` (`172.19.0.3:2152`) and `VUPF` (`172.19.0.2:2152`), bypassing `gNodeB-Home`.
+6. Roaming UE3 registers directly to Home IMS (`sip:ue3@ims.lab`) over the visited IMS PDU bearer.
 
 *Home-Routed roaming (N9/N16) and production SEPP/N32 interconnects are explicitly out of scope.*
 
@@ -244,12 +256,12 @@ A KPI engine measures Post-Dial Delay (PDD), Call Setup Time (CST), Call Setup S
 
 | Metric | Domestic (UE1 ↔ UE2) | Roaming (UE1 ↔ UE3) | SLA Target |
 |--------|----------------------|----------------------|------------|
-| **Post-Dial Delay (PDD)** | 4.12 ms | 3.69 ms | < 200 ms |
-| **Call Setup Time (CST)** | 55.16 ms | 54.59 ms | < 500 ms |
+| **Post-Dial Delay (PDD)** | 4.10 ms | 3.11 ms | < 200 ms |
+| **Call Setup Time (CST)** | 54.18 ms | 54.00 ms | < 500 ms |
 | **Call Setup Success (CSSR)** | 100.0% | 100.0% | 100% |
 | **RTP Packet Loss** | 0.0% (25/25 packets) | 0.0% (25/25 packets) | 0% |
 | **RTP Sequence Continuity** | 0 missing, 0 out-of-order | 0 missing, 0 out-of-order | Continuous |
-| **RFC 3550 Jitter** | 0.855 ms | 0.984 ms | < 20.0 ms |
+| **RFC 3550 Jitter** | 0.819 ms | 0.290 ms | < 20.0 ms |
 | **Estimated MOS** | 4.40 / 4.50 | 4.40 / 4.50 | $\ge$ 4.0 |
 
 *Note: MOS is an ITU-T G.107 E-model approximation for G.711 PCMU ($I_e=0, B_{pl}=4.3$). It is not a subjective ITU-T P.800 listening-panel result.*
@@ -273,7 +285,10 @@ The laboratory is validated by a 91-test automated regression suite:
 
 | Section | Coverage | Result |
 |---------|----------|--------|
-| **Sections 1–8** | 5GC, RAN, multi-PLMN transport, IMS infrastructure | 66/66 PASS |
+| **Sections 1–5** | 5GC Deployments, MongoDB, Kernel & UPF Interfaces | 24/24 PASS |
+| **Section 6** | Isolated gNodeB-Home & gNodeB-Visited, Multi-UE NAS/PDU | 11/11 PASS |
+| **Section 7** | End-to-End Multi-UE User Plane Connectivity (Ping/HTTPS) | 24/24 PASS |
+| **Section 8** | IMS Core Network Functions (Kamailio & RTPEngine) | 7/7 PASS |
 | **Section 9** | Phase 3 IMS Roaming & Multi-PLMN Voice Calls | 8/8 PASS |
 | **Section 10** | Phase 4 Offline Charging & Usage Accounting | 7/7 PASS |
 | **Section 11** | Phase 4 Service Assurance & Real-Time KPI Engine | 10/10 PASS |
@@ -288,8 +303,8 @@ To ensure technical maturity and avoid exaggerated claims, the boundaries of thi
 | Feature | Status | Engineering Reality |
 |---|---|---|
 | **5G SA Core** | Implemented and validated | Full Open5GS multi-NF deployment on Kubernetes (kind) |
+| **Isolated RAN Domains** | Implemented and validated | Independent `gNodeB-Home` (602/03, 602/04) and `gNodeB-Visited` (218/90) |
 | **Multi-UE & Dual PDU** | Implemented and validated | UERANSIM multi-UE with isolated netns per PDU session |
-| **Multi-PLMN Operation** | Implemented and validated | Shared gNodeB broadcasting PLMNs `602/03`, `602/04`, `218/90` |
 | **IMS SIP Registration** | Implemented and validated | Kamailio P/I/S-CSCF Digest MD5 challenge-response |
 | **Domestic & Roaming Voice** | Implemented and validated | End-to-end SIP call setup with bidirectional RTP media |
 | **LBO Roaming** | Implemented and validated | Visited AMF/SMF with Local Breakout at Visited UPF |
@@ -315,14 +330,20 @@ To ensure technical maturity and avoid exaggerated claims, the boundaries of thi
 ├── ROADMAP.md
 ├── SECURITY.md
 ├── configs/
-│   ├── ueransim/                      # gNodeB and UE YAML configurations
+│   ├── ueransim/                      # Isolated gNodeB and UE YAML configurations
+│   │   ├── open5gs-gnb-home.yaml      # gNodeB-Home (PLMNs 602/03, 602/04 -> HAMF :38412)
+│   │   ├── open5gs-gnb-visited.yaml   # gNodeB-Visited (VPLMN 218/90 -> VAMF :38413)
+│   │   ├── open5gs-ue.yaml            # UE1 Home Subscriber (602/03)
+│   │   ├── open5gs-ue2.yaml           # UE2 Home Subscriber (602/04)
+│   │   └── open5gs-ue3.yaml           # UE3 Roaming Subscriber (602/03 in 218/90)
 │   └── sipp/                          # SIP testing scenarios
 ├── docs/
+│   ├── architecture/
+│   │   └── home-vs-visited-ran.md     # Engineering note on RAN separation & LBO path
 │   ├── engineering-notes/
 │   │   ├── phase4-qos-charging-assurance.md  # Detailed Phase 4 engineering documentation
 │   │   ├── linux-networking-behind-5g.md
 │   │   └── debugging-pdu-session.md
-│   ├── architecture/                  # Architecture reference notes
 │   └── images/                        # Architectural and verification diagrams
 ├── k8s/
 │   ├── configmap.yaml                 # 5GC configuration ConfigMap (PCF/BSF debug)
@@ -338,7 +359,7 @@ To ensure technical maturity and avoid exaggerated claims, the boundaries of thi
 │       └── rtpengine.yaml             # RTPEngine media proxy
 └── scripts/
     ├── start-lab.sh                   # Initializes 5GC and IMS pods
-    ├── run-gnb.sh                     # Starts multi-PLMN UERANSIM gNodeB
+    ├── run-gnb.sh                     # Starts isolated Home & Visited UERANSIM gNodeBs
     ├── run-ue.sh                      # Manages UERANSIM UE instances (1, 2, 3)
     ├── test-ims-call.sh               # Executes multi-PLMN SIP registrations and calls
     ├── collect-charging-records.sh    # Queries SQLite CDRs and netns usage counters
@@ -358,8 +379,8 @@ Execute the complete end-to-end operational workflow using `sudo`:
 # 1. Start the 5G Core and IMS infrastructure on Kubernetes
 sudo bash scripts/start-lab.sh
 
-# 2. Launch the multi-PLMN gNodeB
-sudo bash scripts/run-gnb.sh
+# 2. Launch the isolated Home and Visited gNodeB instances
+sudo bash scripts/run-gnb.sh all
 
 # 3. Launch all three UERANSIM UEs (UE1 Home, UE2 Home, UE3 Roaming)
 sudo bash scripts/run-ue.sh all
@@ -385,13 +406,13 @@ Development was structured across four engineering milestones:
 
 1. **Phase 1: 5G SA Core Foundation.** Established basic 5G connectivity, 5G-AKA authentication, and single-UE Internet access.
 2. **Phase 2: Multi-UE & Dual PDU Sessions.** Expanded to three UEs and established parallel Internet (`10.45.0.0/16`) and IMS (`10.46.0.0/16`) PDU sessions.
-3. **Phase 3: IMS & Roaming Integration.** Deployed Kamailio P/I/S-CSCF, RTPEngine, SIP registration, domestic voice, and inter-PLMN LBO roaming (`602/03` ↔ `218/90`).
+3. **Phase 3: IMS & Roaming Integration.** Deployed Kamailio P/I/S-CSCF, RTPEngine, SIP registration, domestic voice, and inter-PLMN LBO roaming (`602/03` ↔ `218/90`) with isolated Home/Visited RAN domains.
 4. **Phase 4: QoS, Charging & Assurance.** Implemented Linux `tc` 3-band queueing, PCF/BSF static policy validation, offline SQLite CDR accounting, user-plane telemetry, and the real-time KPI engine.
 
 ---
 
 ## Conclusion
 
-5G-IMS-Lab demonstrates a real, multi-component, end-to-end telecom laboratory. It validates 5G SA, multi-UE operation, dual PDU sessions, multi-PLMN LBO roaming, IMS SIP registration, domestic and inter-PLMN voice, bidirectional RTP, QoS/DiffServ classification, PCF/BSF static policy, offline CDR accounting, user-plane usage telemetry, and service assurance KPIs.
+5G-IMS-Lab demonstrates a real, multi-component, end-to-end telecom laboratory. It validates 5G SA, multi-UE operation, dual PDU sessions, isolated Home/Visited RAN domains, multi-PLMN LBO roaming, IMS SIP registration, domestic and inter-PLMN voice, bidirectional RTP, QoS/DiffServ classification, PCF/BSF static policy, offline CDR accounting, user-plane usage telemetry, and service assurance KPIs.
 
 The project is validated by a 91/91 automated regression suite, with explicit engineering boundaries documented where production-scope 3GPP functionality is intentionally out of scope.
