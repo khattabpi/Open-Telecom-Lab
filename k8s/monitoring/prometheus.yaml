@@ -13,6 +13,14 @@ data:
         environment: '5g-ims-lab'
         cluster: 'open5gs-cluster'
 
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: ['alertmanager.monitoring.svc.cluster.local:9093']
+
     scrape_configs:
       - job_name: 'telecom-exporter'
         metrics_path: '/metrics'
@@ -60,6 +68,8 @@ spec:
           volumeMounts:
             - name: config-volume
               mountPath: /etc/prometheus
+            - name: rules-volume
+              mountPath: /etc/prometheus/rules
           readinessProbe:
             httpGet:
               path: /-/ready
@@ -76,6 +86,9 @@ spec:
         - name: config-volume
           configMap:
             name: prometheus-config
+        - name: rules-volume
+          configMap:
+            name: prometheus-alert-rules
 ---
 apiVersion: v1
 kind: Service

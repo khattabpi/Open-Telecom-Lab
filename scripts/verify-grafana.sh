@@ -111,8 +111,9 @@ echo -e "\n${CYAN}2. Prometheus Datasource Provisioning${NC}"
 
 DS_JSON=$(curl -s "${GRAFANA_URL}/api/datasources" || echo "[]")
 DS_COUNT=$(echo "$DS_JSON" | jq 'length' 2>/dev/null || echo "0")
-DS_NAME=$(echo "$DS_JSON" | jq -r '.[0].name' 2>/dev/null || echo "")
-DS_URL=$(echo "$DS_JSON" | jq -r '.[0].url' 2>/dev/null || echo "")
+DS_NAME=$(echo "$DS_JSON" | jq -r '.[] | select(.name=="Prometheus") | .name' 2>/dev/null || echo "")
+DS_URL=$(echo "$DS_JSON" | jq -r '.[] | select(.name=="Prometheus") | .url' 2>/dev/null || echo "")
+PROM_ID=$(echo "$DS_JSON" | jq -r '.[] | select(.name=="Prometheus") | .id' 2>/dev/null || echo "1")
 
 if [[ "$DS_COUNT" -ge 1 && "$DS_NAME" == "Prometheus" ]]; then
     check_pass "[GRAFANA-07] Prometheus Datasource" "Provisioned automatically (${DS_NAME} -> ${DS_URL})"
@@ -120,7 +121,7 @@ else
     check_fail "[GRAFANA-07] Prometheus Datasource" "Expected datasource named 'Prometheus', got '${DS_NAME}'"
 fi
 
-PROXY_QUERY=$(curl -s "${GRAFANA_URL}/api/datasources/proxy/1/api/v1/query?query=open5gs_5gc_registered_ues" || echo "")
+PROXY_QUERY=$(curl -G -s "${GRAFANA_URL}/api/datasources/proxy/${PROM_ID}/api/v1/query" --data-urlencode "query=open5gs_5gc_registered_ues" || echo "")
 if echo "$PROXY_QUERY" | grep -q '"status":"success"'; then
     RES_LEN=$(echo "$PROXY_QUERY" | jq '.data.result | length' 2>/dev/null || echo "0")
     check_pass "[GRAFANA-08] Datasource Proxy Connectivity" "Grafana proxy successfully queries Prometheus (${RES_LEN} series returned)"

@@ -362,11 +362,13 @@ To ensure technical maturity and avoid exaggerated claims, the boundaries of thi
 │       ├── rbac.yaml                  # Telecom monitoring ClusterRole & ServiceAccount
 │       ├── telecom-exporter.yaml      # Custom Telecom Metrics Exporter (:9100)
 │       ├── prometheus.yaml            # Prometheus server deployment & scrape config
+│       ├── prometheus-alert-rules.yaml # Declarative 21-rule Telecom Alerting Policy
+│       ├── alertmanager.yaml          # Alertmanager deployment & notification routing
 │       ├── grafana.yaml               # Grafana server deployment & datasource config
 │       ├── grafana-dashboard-configmap.yaml # Provisioned Telecom Operations Dashboard
-│       └── dashboard-telecom-overview.json # Primary 40-panel Operations Overview JSON
+│       └── dashboard-telecom-overview.json # Primary 43-panel Operations Overview JSON
 └── scripts/
-    ├── start-lab.sh                   # Initializes 5GC, IMS, Prometheus, and Grafana pods
+    ├── start-lab.sh                   # Initializes 5GC, IMS, Prometheus, Alertmanager, and Grafana
     ├── run-gnb.sh                     # Starts isolated Home & Visited UERANSIM gNodeBs
     ├── run-ue.sh                      # Manages UERANSIM UE instances (1, 2, 3)
     ├── test-ims-call.sh               # Executes multi-PLMN SIP registrations and calls
@@ -377,6 +379,7 @@ To ensure technical maturity and avoid exaggerated claims, the boundaries of thi
     ├── validate-ims-call.sh           # Validates IMS call signaling and logs
     ├── verify-observability.sh        # Phase 5.2 Prometheus & Telemetry test suite
     ├── verify-grafana.sh              # Phase 5.3 Grafana Operations Dashboard test suite
+    ├── verify-alerting.sh             # Phase 5.4 Prometheus Alerting & Fault Injection test suite
     └── verify-lab.sh                  # Official 91-test regression verification suite
 ```
 
@@ -387,7 +390,7 @@ To ensure technical maturity and avoid exaggerated claims, the boundaries of thi
 Execute the complete end-to-end operational workflow using `sudo`:
 
 ```bash
-# 1. Start the 5G Core, IMS, Prometheus, and Grafana infrastructure on Kubernetes
+# 1. Start the 5G Core, IMS, Prometheus, Alertmanager, and Grafana on Kubernetes
 sudo bash scripts/start-lab.sh
 
 # 2. Launch the isolated Home and Visited gNodeB instances
@@ -411,7 +414,10 @@ sudo bash scripts/measure-kpis.sh
 # 8. Run the dedicated Grafana Operations Dashboard verification suite
 ./scripts/verify-grafana.sh
 
-# 9. Run the official 91-test automated regression suite
+# 9. Run the dedicated Prometheus Alerting & Fault Injection verification suite
+./scripts/verify-alerting.sh
+
+# 10. Run the official 91-test automated regression suite
 sudo bash scripts/verify-lab.sh
 ```
 
@@ -428,12 +434,13 @@ Development is structured across the following milestones:
 5. **Phase 5: Telecom Operations & Observability.** (In Progress)
    - **Phase 5.1:** 3-tier Observability Architecture & 7-domain standardized metrics model definition.
    - **Phase 5.2:** Prometheus deployment in `monitoring` namespace, continuous `telecom-exporter` scraping (5s interval), and live PromQL query validation.
-   - **Phase 5.3:** Provisioned Grafana Operations Dashboard (`30300`), Prometheus datasource auto-configuration, 8 visual sections (40 panels), and live telemetry tracking.
+   - **Phase 5.3:** Provisioned Grafana Operations Dashboard (`30300`), Prometheus datasource auto-configuration, 8 visual sections (43 panels), and live telemetry tracking.
+   - **Phase 5.4:** Declarative Prometheus Alert Rules (21 telecom rules across 6 groups), Alertmanager deployment (`30093`), automated fault-injection lifecycle testing, and Grafana incident integration.
 
 ---
 
 ## Conclusion
 
-5G-IMS-Lab demonstrates a real, multi-component, end-to-end telecom laboratory. It validates 5G SA, multi-UE operation, dual PDU sessions, isolated Home/Visited RAN domains, multi-PLMN LBO roaming, IMS SIP registration, domestic and inter-PLMN voice, bidirectional RTP, QoS/DiffServ classification, PCF/BSF static policy, offline CDR accounting, user-plane usage telemetry, service assurance KPIs, and continuous Prometheus & Grafana observability.
+5G-IMS-Lab demonstrates a real, multi-component, end-to-end telecom laboratory. It validates 5G SA, multi-UE operation, dual PDU sessions, isolated Home/Visited RAN domains, multi-PLMN LBO roaming, IMS SIP registration, domestic and inter-PLMN voice, bidirectional RTP, QoS/DiffServ classification, PCF/BSF static policy, offline CDR accounting, user-plane usage telemetry, service assurance KPIs, continuous Prometheus & Grafana observability, and automated Alertmanager incident detection.
 
-The project is validated by a 91/91 automated regression suite, a 19/19 dedicated observability suite, and an 18/18 Grafana operations suite, with explicit engineering boundaries documented where production-scope 3GPP functionality is intentionally out of scope.
+The project is validated by a 91/91 automated core regression suite, a 19/19 dedicated observability suite, an 18/18 Grafana operations suite, and a 19/19 Prometheus alerting suite, with explicit engineering boundaries documented where production-scope 3GPP functionality is intentionally out of scope.

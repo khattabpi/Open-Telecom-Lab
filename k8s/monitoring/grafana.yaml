@@ -16,6 +16,15 @@ data:
         jsonData:
           timeInterval: 5s
           httpMethod: POST
+      - name: Alertmanager
+        type: alertmanager
+        access: proxy
+        url: http://alertmanager.monitoring.svc.cluster.local:9093
+        isDefault: false
+        editable: false
+        jsonData:
+          implementation: prometheus
+          handleGrafanaManagedAlerts: false
 ---
 apiVersion: v1
 kind: ConfigMap

@@ -1,0 +1,271 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-alert-rules
+  namespace: monitoring
+data:
+  telecom-alerts.yml: |
+    groups:
+      - name: telecom_infra_alerts
+        rules:
+          - alert: Open5gsCorePodsDegraded
+            expr: sum(k8s_infra_pod_ready{namespace="open5gs"}) < 12
+            for: 5s
+            labels:
+              severity: critical
+              layer: infra
+              component: open5gs-5gc
+            annotations:
+              summary: "Open5GS 5G Core ready pod count ({{ $value }}) is below expected baseline of 12"
+              description: "One or more 5G Core Network Function pods are missing or NotReady."
+              runbook: "kubectl get pods -n open5gs"
+
+          - alert: ImsCorePodsDegraded
+            expr: sum(k8s_infra_pod_ready{namespace="ims"}) < 4
+            for: 5s
+            labels:
+              severity: critical
+              layer: infra
+              component: kamailio-ims
+            annotations:
+              summary: "Kamailio IMS ready pod count ({{ $value }}) is below expected baseline of 4"
+              description: "One or more IMS CSCF / RTPEngine pods are missing or NotReady."
+              runbook: "kubectl get pods -n ims"
+
+          - alert: K8sPodNotReady
+            expr: k8s_infra_pod_ready == 0
+            for: 5s
+            labels:
+              severity: critical
+              layer: infra
+              component: kubernetes
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod_name }} is not ready"
+              description: "Kubernetes pod {{ $labels.pod_name }} in namespace {{ $labels.namespace }} is in NotReady state."
+              runbook: "kubectl describe pod -n {{ $labels.namespace }} {{ $labels.pod_name }}"
+
+          - alert: TelecomExporterDown
+            expr: up{job="telecom-exporter"} == 0
+            for: 5s
+            labels:
+              severity: critical
+              layer: observability
+              component: telecom-exporter
+            annotations:
+              summary: "telecom-exporter scrape target is unreachable"
+              description: "Prometheus cannot scrape telemetry from telecom-exporter (:9100)."
+              runbook: "kubectl logs -n monitoring -l app=telecom-exporter"
+
+          - alert: PrometheusScrapeFailed
+            expr: up{job="prometheus"} == 0
+            for: 5s
+            labels:
+              severity: critical
+              layer: observability
+              component: prometheus
+            annotations:
+              summary: "Prometheus self-scrape endpoint is failing"
+              description: "Prometheus server instance cannot scrape its own internal metrics."
+              runbook: "kubectl logs -n monitoring -l app=prometheus"
+
+      - name: telecom_5g_core_alerts
+        rules:
+          - alert: Open5gsRegisteredUeDrop
+            expr: open5gs_5gc_registered_ues < 1
+            for: 10s
+            labels:
+              severity: critical
+              layer: 5gc-control-plane
+              component: amf
+            annotations:
+              summary: "Registered UE count dropped below baseline for PLMN {{ $labels.plmn }}"
+              description: "AMF reports 0 registered UEs in PLMN {{ $labels.plmn }} (role: {{ $labels.role }})."
+              runbook: "sudo bash scripts/run-ue.sh all"
+
+          - alert: Open5gsPduSessionInactive
+            expr: open5gs_5gc_active_pdu_sessions == 0
+            for: 10s
+            labels:
+              severity: critical
+              layer: 5gc-user-plane
+              component: smf-upf
+            annotations:
+              summary: "Active PDU session inactive for {{ $labels.ue_id }} on DNN {{ $labels.dnn }}"
+              description: "Dual PDU session for subscriber {{ $labels.ue_id }} (DNN {{ $labels.dnn }}) has been terminated or failed."
+              runbook: "sudo bash scripts/run-ue.sh all"
+
+          - alert: Open5gsNgapN2Failure
+            expr: open5gs_5gc_ngap_n2_associations == 0
+            for: 10s
+            labels:
+              severity: critical
+              layer: ran-5gc-n2
+              component: gnb-amf
+            annotations:
+              summary: "N2 NGAP association down for {{ $labels.gnb_instance }} -> {{ $labels.target_amf }}"
+              description: "gNodeB instance {{ $labels.gnb_instance }} lost SCTP N2 association to AMF."
+              runbook: "sudo bash scripts/run-gnb.sh all"
+
+          - alert: Open5gsPfcpN4Failure
+            expr: open5gs_5gc_pfcp_n4_status == 0
+            for: 10s
+            labels:
+              severity: critical
+              layer: 5gc-control-plane
+              component: smf-upf
+            annotations:
+              summary: "N4 PFCP control association down for {{ $labels.smf_instance }}"
+              description: "SMF instance {{ $labels.smf_instance }} lost UDP :8805 PFCP session to UPF gateway."
+              runbook: "kubectl logs -n open5gs deploy/open5gs-smf"
+
+      - name: telecom_ims_sip_alerts
+        rules:
+          - alert: ImsSipServerDown
+            expr: ims_sip_server_status == 0
+            for: 10s
+            labels:
+              severity: critical
+              layer: ims-signaling
+              component: kamailio-cscf
+            annotations:
+              summary: "Kamailio SIP Server component {{ $labels.component }} is down"
+              description: "SIP proxy probe failed on {{ $labels.component }} (SIP OPTIONS or socket failure)."
+              runbook: "kubectl logs -n ims deploy/kamailio-{{ $labels.component }}"
+
+          - alert: ImsSubscriberUnregistered
+            expr: ims_sip_subscriber_reg_status == 0
+            for: 10s
+            labels:
+              severity: warning
+              layer: ims-signaling
+              component: s-cscf
+            annotations:
+              summary: "IMS subscriber {{ $labels.ue_id }}@{{ $labels.domain }} is unregistered"
+              description: "S-CSCF USRLOC table does not have an active SIP digest registration for {{ $labels.ue_id }}."
+              runbook: "sudo bash scripts/test-ims-call.sh"
+
+          - alert: ImsRegisteredSubscribersLow
+            expr: ims_sip_registered_subscribers < 3
+            for: 10s
+            labels:
+              severity: warning
+              layer: ims-signaling
+              component: s-cscf
+            annotations:
+              summary: "Total active IMS registrations ({{ $value }}) below expected baseline (3)"
+              description: "Fewer than 3 registered subscribers in Kamailio S-CSCF USRLOC database."
+              runbook: "sudo bash scripts/test-ims-call.sh"
+
+      - name: telecom_rtp_media_alerts
+        rules:
+          - alert: RtpEngineControlDown
+            expr: ims_rtp_proxy_status == 0
+            for: 10s
+            labels:
+              severity: critical
+              layer: rtp-media
+              component: rtpengine
+            annotations:
+              summary: "RTPEngine NG UDP control socket :22222 unreachable"
+              description: "RTPEngine media proxy daemon is not responding to Bencode control pings."
+              runbook: "kubectl logs -n ims deploy/rtpengine"
+
+      - name: telecom_service_assurance_alerts
+        rules:
+          - alert: QoEMosDegraded
+            expr: qoe_telecom_mos_estimated < 4.0
+            for: 10s
+            labels:
+              severity: warning
+              layer: qoe-assurance
+              component: e-model
+            annotations:
+              summary: "Estimated Voice MOS score {{ $value }} degraded below 4.0 ({{ $labels.call_type }})"
+              description: "ITU-T G.107 E-model calculation shows Voice Quality MOS below operational threshold (4.0)."
+              runbook: "sudo bash scripts/measure-kpis.sh"
+
+          - alert: QoECssrLow
+            expr: qoe_telecom_cssr_percent < 99.0
+            for: 10s
+            labels:
+              severity: critical
+              layer: qoe-assurance
+              component: kpi-engine
+            annotations:
+              summary: "Call Setup Success Rate (CSSR) {{ $value }}% below 99.0% ({{ $labels.call_type }})"
+              description: "SIP call establishment success rate dropped below SLA requirement."
+              runbook: "sudo bash scripts/test-ims-call.sh"
+
+          - alert: QoEPacketLossHigh
+            expr: qoe_telecom_packet_loss_ratio > 0.01
+            for: 10s
+            labels:
+              severity: critical
+              layer: qoe-assurance
+              component: rtp-stream
+            annotations:
+              summary: "RTP packet loss {{ $value }} exceeds 1.0% threshold ({{ $labels.direction }})"
+              description: "User-plane voice media stream experiencing unacceptable packet loss."
+              runbook: "sudo bash scripts/measure-kpis.sh"
+
+          - alert: QoEPddHigh
+            expr: qoe_telecom_pdd_seconds > 0.200
+            for: 10s
+            labels:
+              severity: warning
+              layer: qoe-assurance
+              component: sip-signaling
+            annotations:
+              summary: "Post-Dial Delay (PDD) {{ $value }}s exceeds 200ms threshold ({{ $labels.call_type }})"
+              description: "Time between SIP INVITE and 180 Ringing exceeded latency SLA."
+              runbook: "sudo bash scripts/measure-kpis.sh"
+
+          - alert: QoEJitterHigh
+            expr: qoe_telecom_jitter_ms > 20.0
+            for: 10s
+            labels:
+              severity: warning
+              layer: qoe-assurance
+              component: rtp-stream
+            annotations:
+              summary: "RFC 3550 RTP jitter {{ $value }}ms exceeds 20ms threshold"
+              description: "Voice packet inter-arrival jitter exceeds threshold, causing packet queue buffer delays."
+              runbook: "sudo bash scripts/measure-kpis.sh"
+
+      - name: telecom_roaming_alerts
+        rules:
+          - alert: RoamingUeDetached
+            expr: roaming_ue_attached_status == 0
+            for: 10s
+            labels:
+              severity: critical
+              layer: roaming-vplmn
+              component: v-amf
+            annotations:
+              summary: "Roaming UE {{ $labels.ue_id }} (HPLMN: {{ $labels.hplmn }} -> VPLMN: {{ $labels.vplmn }}) detached"
+              description: "UE3 is not attached to Visited AMF 218/90 or 5G-AKA roaming registration failed."
+              runbook: "sudo bash scripts/run-ue.sh 3"
+
+          - alert: RoamingLboUserPlaneDown
+            expr: roaming_lbo_user_plane_status == 0
+            for: 10s
+            labels:
+              severity: critical
+              layer: roaming-vplmn
+              component: v-upf
+            annotations:
+              summary: "Local Breakout (LBO) Visited UPF data path is down"
+              description: "Visited UPF user plane tunnel endpoint unreachable from roaming UE."
+              runbook: "kubectl logs -n open5gs deploy/open5gs-upf"
+
+          - alert: RoamingSuccessRateLow
+            expr: roaming_inter_plmn_success_rate < 99.0
+            for: 10s
+            labels:
+              severity: critical
+              layer: roaming-inter-plmn
+              component: s-cscf
+            annotations:
+              summary: "Inter-PLMN roaming call success rate dropped to {{ $value }}%"
+              description: "International/Inter-PLMN voice call completion rate is below SLA."
+              runbook: "sudo bash scripts/test-ims-call.sh roaming"
