@@ -1,12 +1,12 @@
 # Kamailio IMS Service Layer for 5G SA Lab
 
-This directory contains the Kubernetes manifests and configurations to deploy a complete, production-grade 3GPP IMS (IP Multimedia Subsystem) service layer on top of Open5GS 5G Standalone core.
+This directory contains the Kubernetes manifests and configurations to deploy a software-based 3GPP IMS (IP Multimedia Subsystem) service layer on top of Open5GS 5G Standalone core.
 
 ---
 
 ## 🏛️ Architecture Overview
 
-```
+```text
                           5G SA User Plane (GTP-U / N3)
                                        │
                                        ▼
@@ -14,7 +14,7 @@ This directory contains the Kubernetes manifests and configurations to deploy a 
                                        │
                   ┌────────────────────┴────────────────────┐
                   │                                         │
-       [UE1: 10.46.0.7:5060]                     [UE2: 10.46.0.8:5060]
+       [UE1: 10.46.0.x:5060]                     [UE2: 10.46.0.y:5060]
        IMSI: 001010000000001                     IMSI: 001010000000002
        SIP: sip:ue1@ims.lab                      SIP: sip:ue2@ims.lab
                   │                                         │
@@ -48,8 +48,8 @@ This directory contains the Kubernetes manifests and configurations to deploy a 
     │                                                                         │
     │  ┌───────────────────────────────────────────────────────────────────┐  │
     │  │ RTPEngine (Media Relay Daemon) — rtpengine                        │  │
-    │  │ • Control: rtpengine:22222 (UDP NG protocol)                      │  │
-    │  │ • Media Relay Port Range: 20000-20100                             │  │
+    │  │ • Control: 10.46.0.1:22222 (UDP NG protocol, hostNetwork: true)   │  │
+    │  │ • Media Relay Port Range: UDP 20000-20100                         │  │
     │  └───────────────────────────────────────────────────────────────────┘  │
     └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -62,19 +62,19 @@ This directory contains the Kubernetes manifests and configurations to deploy a 
 | :--- | :--- | :--- |
 | `namespace.yaml` | `Namespace` | Creates isolated `ims` namespace |
 | `configmap.yaml` | `ConfigMap` | Kamailio configuration files (`pcscf.cfg`, `icscf.cfg`, `scscf.cfg`) and SQLite DB init |
-| `rtpengine.yaml` | `Deployment`, `Service` | Next-generation RTP media proxy daemon |
-| `scscf.yaml` | `Deployment`, `Service` | Serving-CSCF with SQLite subscriber backend |
-| `icscf.yaml` | `Deployment`, `Service` | Interrogating-CSCF |
+| `rtpengine.yaml` | `Deployment`, `Service` | Media proxy for SDP rewriting and bidirectional RTP relay (`hostNetwork: true`) |
+| `scscf.yaml` | `Deployment`, `Service` | Serving-CSCF with SQLite subscriber backend (Digest MD5) |
+| `icscf.yaml` | `Deployment`, `Service` | Interrogating-CSCF for domain routing |
 | `pcscf.yaml` | `Deployment`, `Service` | Proxy-CSCF binding to hostNetwork `10.46.0.1:5060` |
 
 ---
 
 ## 👥 Provisioned IMS Subscribers
 
-| Subscriber | IMSI | IMPU (SIP URI) | IMPI (Auth User) | Password | IMS IP |
+| Subscriber | IMSI | IMPU (SIP URI) | IMPI (Auth User) | Password | IMS IP Allocation |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **UE1** | `001010000000001` | `sip:ue1@ims.lab` | `ue1` | `password123` | `10.46.0.7` |
-| **UE2** | `001010000000002` | `sip:ue2@ims.lab` | `ue2` | `password123` | `10.46.0.8` |
+| **UE1** | `001010000000001` | `sip:ue1@ims.lab` | `ue1` | `password123` | Dynamic (`10.46.0.0/16`) |
+| **UE2** | `001010000000002` | `sip:ue2@ims.lab` | `ue2` | `password123` | Dynamic (`10.46.0.0/16`) |
 
 ---
 
@@ -90,12 +90,17 @@ kubectl apply -f k8s/ims/
 kubectl -n ims get pods -o wide
 ```
 
-### 3. Test End-to-End SIP Call & Bidirectional RTP Stream
+### 3. Run Standalone IMS Diagnostics
+```bash
+sudo bash scripts/validate-ims-call.sh
+```
+
+### 4. Test End-to-End SIP Call & Bidirectional RTP Stream
 ```bash
 sudo bash scripts/test-ims-call.sh
 ```
 
-### 4. Run Full Regression Verification
+### 5. Run Full Regression Verification
 ```bash
 sudo bash scripts/verify-lab.sh
 ```

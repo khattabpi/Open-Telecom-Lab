@@ -12,15 +12,15 @@ Before debugging failures, it is important to understand the success path. The P
 sequenceDiagram
     participant UE as 📱 UE
     participant AMF as AMF
-    participant SMF as SMF<br/>(127.0.0.4)
-    participant UPF as UPF<br/>(127.0.0.7)
+    participant SMF as SMF
+    participant UPF as UPF (ogstun)
 
-    UE->>AMF: NAS PDU Session Establishment Request<br/>(DNN: internet, SST: 1, SD: 0xFFFFFF)
-    AMF->>SMF: Nsmf_PDUSession_CreateSMContext<br/>(via SCP)
-    SMF->>UPF: PFCP Session Establishment Request<br/>(Create PDR, FAR, QER)
-    UPF-->>SMF: PFCP Session Establishment Response<br/>(F-TEID, UE IP: 10.45.0.x)
+    UE->>AMF: NAS PDU Session Establishment Request<br/>(DNN: internet or ims, SST: 1, SD: 0xFFFFFF)
+    AMF->>SMF: Nsmf_PDUSession_CreateSMContext (SBI)
+    SMF->>UPF: PFCP Session Establishment Request<br/>(Create PDR, FAR, QER on UDP :8805)
+    UPF-->>SMF: PFCP Session Establishment Response<br/>(F-TEID, UE IP: 10.45.0.x or 10.46.0.x)
     SMF-->>AMF: N1N2MessageTransfer<br/>(NAS PDU + N2 SM Info)
-    AMF->>UE: NAS PDU Session Establishment Accept<br/>(IP: 10.45.0.x, QoS Rules)
+    AMF->>UE: NAS PDU Session Establishment Accept<br/>(Dynamic IP, QoS Rules)
 ```
 
 A failure at any point in this chain produces different symptoms. This document covers the three most common failure scenarios.
@@ -33,28 +33,23 @@ The UE reaches `MM-REGISTERED/NORMAL-SERVICE` but the PDU Session Establishment 
 
 ### Possible Cause A: DNN Mismatch
 
-The DNN (Data Network Name) must match across three configuration points:
+The DNN (Data Network Name) must match across configuration points:
 
-| Location | Config File | Parameter | Expected Value |
-|----------|-------------|-----------|----------------|
-| UE | `configs/ueransim/open5gs-ue.yaml` | `sessions[0].apn` | `internet` |
-| SMF | `/etc/open5gs/smf.yaml` | `info[0].s_nssai[0].dnn` | `internet` |
-| UPF | `/etc/open5gs/upf.yaml` | `session[0].dnn` | `internet` |
+| Location | Config File | Parameter | Expected Values |
+|----------|-------------|-----------|-----------------|
+| UE1 | `configs/ueransim/open5gs-ue.yaml` | `sessions[0,1].apn` | `internet`, `ims` |
+| UE2 | `configs/ueransim/open5gs-ue2.yaml` | `sessions[0,1].apn` | `internet`, `ims` |
+| SMF | `k8s/configmap.yaml` (smf.yaml) | `info[0].s_nssai[0].dnn` | `internet`, `ims` |
+| UPF | `k8s/configmap.yaml` (upf.yaml) | `session[0,1].dnn` | `internet`, `ims` |
 
 **How to verify:**
 
 ```bash
 # Check UE config
-grep 'apn:' configs/ueransim/open5gs-ue.yaml
-# Expected: apn: 'internet'
+grep -A2 'sessions:' configs/ueransim/open5gs-ue.yaml
 
-# Check SMF config
-grep -A2 'dnn:' /etc/open5gs/smf.yaml
-# Expected: - internet
-
-# Check UPF config
-grep 'dnn:' /etc/open5gs/upf.yaml
-# Expected: dnn: internet
+# Check SMF config in Kubernetes ConfigMap
+kubectl get configmap -n open5gs open5gs-config -o yaml | grep -A5 's_nssai:'
 ```
 
 **Why this matters:** The SMF selects a UPF based on the DNN and S-NSSAI requested by the UE. If the DNN in the UE's request does not match any DNN configured in the SMF's `info` section, the SMF rejects the session with cause `#27 (Missing or unknown DNN)`.
@@ -65,58 +60,44 @@ The S-NSSAI (Single Network Slice Selection Assistance Information) consists of 
 
 | Location | SST | SD | Notes |
 |----------|-----|-----|-------|
-| UE `configured-nssai` | 1 | 16777215 | Decimal for 0xFFFFFF |
-| UE `sessions[0].slice` | 1 | 16777215 | |
-| AMF `plmn_support.s_nssai` | 1 | *(not set = 0xFFFFFF)* | |
-| SMF `info.s_nssai` | 1 | ffffff | Hex string |
-| UPF | *(inherited from SMF)* | | |
-
-**Common mistake:** The SD value `ffffff` (hex string in SMF) must equal `16777215` (decimal integer in UERANSIM) and `0xffffff` (hex in gNB config). These are three representations of the same value.
+| UE `configured-nssai` | 1 | `0xFFFFFF` | Hex formatted |
+| UE `sessions[x].slice` | 1 | `0xFFFFFF` | Dual sessions (Internet & IMS) |
+| AMF `plmn_support.s_nssai` | 1 | `ffffff` | Hex string in ConfigMap |
+| SMF `info.s_nssai` | 1 | `ffffff` | Hex string in ConfigMap |
 
 **How to verify:**
 
 ```bash
-# Check SMF slice config
-grep -B1 -A2 's_nssai' /etc/open5gs/smf.yaml
-# Expected: sst: 1, sd: ffffff
-
-# Check AMF slice config
-grep -B1 -A2 's_nssai' /etc/open5gs/amf.yaml
-# Expected: sst: 1
+# Check SMF slice configuration
+kubectl get configmap -n open5gs open5gs-config -o yaml | grep -B1 -A2 's_nssai:'
 ```
 
 ### Possible Cause C: SMF-UPF PFCP Failure
 
-The SMF communicates with the UPF over PFCP (Packet Forwarding Control Protocol) on the N4 interface. If this connection fails, the SMF cannot create a session on the UPF.
+The SMF communicates with the UPF over PFCP (Packet Forwarding Control Protocol) on the N4 interface (port 8805). If this connection fails, the SMF cannot create a session on the UPF.
 
 **Verification steps:**
 
 ```bash
-# 1. Check UPF is running
-sudo systemctl status open5gs-upfd
-# Must show: active (running)
+# 1. Check UPF and SMF pods are running
+kubectl get pods -n open5gs -l 'app in (open5gs-upf,open5gs-smf)'
 
-# 2. Verify PFCP addresses match
-grep -A2 'pfcp:' /etc/open5gs/smf.yaml
-# SMF PFCP client should point to UPF: address: 127.0.0.7
+# 2. Check for PFCP socket binding on the node
+ss -ulnp | grep 8805
 
-grep -A2 'pfcp:' /etc/open5gs/upf.yaml
-# UPF PFCP server should listen on: address: 127.0.0.7
+# 3. Check SMF logs for PFCP errors
+kubectl logs -n open5gs deployment/open5gs-smf --tail=50 | grep -i "pfcp\|upf\|error"
 
-# 3. Check for PFCP association
-sudo tcpdump -i lo -c 5 udp port 8805
-# Should see PFCP Heartbeat Request/Response if association is active
-
-# 4. Check SMF logs for errors
-sudo journalctl -u open5gs-smfd --since "5 min ago" | grep -i "pfcp\|upf\|error"
+# 4. Check UPF logs
+kubectl logs -n open5gs deployment/open5gs-upf --tail=50
 ```
 
 **PFCP Association lifecycle:**
 
 ```mermaid
 sequenceDiagram
-    participant SMF as SMF (127.0.0.4)
-    participant UPF as UPF (127.0.0.7)
+    participant SMF as open5gs-smf
+    participant UPF as open5gs-upf (172.19.0.2:8805)
 
     Note over SMF,UPF: On SMF startup
     SMF->>UPF: PFCP Association Setup Request
@@ -132,104 +113,77 @@ sequenceDiagram
     Note over SMF: Reject new PDU sessions
 ```
 
-If the UPF process is restarted but the SMF is not, the PFCP association may be stale. **Restart the SMF** after restarting the UPF:
+If the UPF deployment is restarted, the SMF should also be restarted to refresh the PFCP association:
 
 ```bash
-sudo systemctl restart open5gs-upfd
-sudo systemctl restart open5gs-smfd    # Must restart after UPF
+kubectl -n open5gs rollout restart deployment/open5gs-upf deployment/open5gs-smf
 ```
 
 ---
 
-## Scenario 2: UE Gets IP but No Internet Access
+## Scenario 2: UE Gets IP but No Internet or IMS Access
 
-The UE receives an IP address (e.g., `10.45.0.5`) and the TUN interface is up, but `ping 8.8.8.8` from the UE namespace fails.
+The UE receives an IP address (e.g., `10.45.0.4` for Internet or `10.46.0.4` for IMS), but ping to `10.45.0.1` / `10.46.0.1` fails.
 
 ### Understanding the Data Path
 
 ```mermaid
 graph TD
-    A["📱 UE Application<br/>(ping 8.8.8.8)"] --> B["uesimtun0<br/>10.45.0.5"]
-    B --> C["GTP-U Encapsulation<br/>(UDP/2152)"]
-    C --> D["UPF Decapsulation<br/>127.0.0.7"]
-    D --> E["ogstun Interface<br/>10.45.0.1/16"]
-    E --> F{"IP Forwarding<br/>Enabled?"}
+    A["📱 UE in Netns<br/>(ping 8.8.8.8)"] --> B["uesimtun0<br/>10.45.0.x"]
+    B --> C["GTP-U Encapsulation<br/>(UDP/2152 to 172.19.0.2)"]
+    C --> D["UPF Decapsulation<br/>(open5gs-upfd)"]
+    D --> E["ogstun Interface<br/>10.45.0.1 / 10.46.0.1"]
+    E --> F{"Host IP Forwarding &<br/>rp_filter = 0?"}
     F -->|Yes| G["iptables NAT<br/>MASQUERADE"]
     F -->|No| X1["❌ Packet dropped"]
     G --> H{"NAT Rule<br/>Exists?"}
-    H -->|Yes| I["🌐 Internet"]
-    H -->|No| X2["❌ Packet dropped<br/>(source IP 10.45.0.x<br/>not routable)"]
+    H -->|Yes| I["🌐 Internet / IMS Services"]
+    H -->|No| X2["❌ Packet dropped<br/>(unroutable private IP)"]
 
     style X1 fill:#FFCDD2,stroke:#C62828
     style X2 fill:#FFCDD2,stroke:#C62828
     style I fill:#C8E6C9,stroke:#2E7D32
 ```
 
-A failure at any point in this chain breaks internet access.
-
 ### Check 1: UPF Forwarding (ogstun interface)
 
 ```bash
-# Verify ogstun interface exists and has the correct IP
-ip addr show ogstun
+# Verify ogstun interface inside kind node has both Internet & IMS IPs
+docker exec open5gs-cluster-control-plane ip addr show ogstun
 # Expected output:
 #   inet 10.45.0.1/16 scope global ogstun
-
-# If ogstun is missing, the UPF did not create it
-# Check UPF configuration:
-grep -A4 'session:' /etc/open5gs/upf.yaml
-# Expected:
-#   - subnet: 10.45.0.0/16
-#     gateway: 10.45.0.1
-#     dnn: internet
+#   inet 10.46.0.1/16 scope global ogstun
 ```
 
-The `ogstun` interface is a TUN device created by the UPF process. It represents the N6 interface — the exit point from the 5G network toward the data network. Packets arriving via GTP-U are decapsulated by the UPF and placed on `ogstun`.
+The `ogstun` interface is a TUN device managed by the UPF container. It represents the N6 interface. Packets arriving via GTP-U are decapsulated by the UPF and placed onto `ogstun`.
 
-### Check 2: Linux IP Forwarding
+### Check 2: Linux IP Forwarding & rp_filter
 
 ```bash
-# Check current state
-sysctl net.ipv4.ip_forward
-# Must show: net.ipv4.ip_forward = 1
-
-# If disabled, enable it:
-sudo sysctl -w net.ipv4.ip_forward=1
-
-# Make it persistent across reboots:
-echo 'net.ipv4.ip_forward=1' | sudo tee -a /etc/sysctl.d/99-open5gs.conf
-sudo sysctl -p /etc/sysctl.d/99-open5gs.conf
+# Verify host forwarding and rp_filter
+sudo sysctl net.ipv4.ip_forward net.ipv4.conf.all.rp_filter
+# Expected:
+#   net.ipv4.ip_forward = 1
+#   net.ipv4.conf.all.rp_filter = 0
 ```
-
-**Why this is needed:** The Linux kernel receives packets on `ogstun` (destination: `8.8.8.8`) that need to be forwarded out through the host's physical interface. Without `ip_forward=1`, the kernel drops these packets silently.
 
 ### Check 3: iptables NAT
 
 ```bash
-# Check if NAT rule exists
-sudo iptables -t nat -L POSTROUTING -n -v
-# Look for a MASQUERADE rule with source 10.45.0.0/16
-
-# If missing, add it:
-sudo iptables -t nat -A POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
+# Verify MASQUERADE rules exist on host and kind node
+sudo iptables -t nat -L POSTROUTING -n -v | grep -E "10.45.0.0|10.46.0.0"
 ```
-
-**What MASQUERADE does:** It replaces the source IP (`10.45.0.5`) with the host's outgoing interface IP before sending the packet to the internet. Without this, the return traffic from `8.8.8.8` has no route back to `10.45.0.0/16` (a private subnet).
-
-**The `! -o ogstun` clause** prevents NAT from being applied to packets that stay within the UPF subnet (e.g., UE-to-UE traffic). Without this exclusion, intra-UPF traffic would be unnecessarily NATed.
 
 ### Check 4: Verify End-to-End
 
 ```bash
-# Test from UE namespace
-sudo ip netns exec ueransim-001010000000001-internet-psi1 \
-  ping -c 3 10.45.0.1          # Can UE reach UPF gateway?
+# Test from UE1 Internet namespace
+sudo ip netns exec ueransim-001010000000001-internet-psi1 ping -c 2 10.45.0.1
+sudo ip netns exec ueransim-001010000000001-internet-psi1 ping -c 2 8.8.8.8
+sudo ip netns exec ueransim-001010000000001-internet-psi1 curl -s -I https://www.google.com
 
-sudo ip netns exec ueransim-001010000000001-internet-psi1 \
-  ping -c 3 8.8.8.8            # Can UE reach internet?
-
-# If gateway ping works but internet fails, the issue is NAT/forwarding
-# If gateway ping fails, the issue is GTP-U or UPF
+# Test from UE1 IMS namespace
+sudo ip netns exec ueransim-001010000000001-ims-psi2 ping -c 2 10.46.0.1
 ```
 
 ---
@@ -238,96 +192,52 @@ sudo ip netns exec ueransim-001010000000001-internet-psi1 \
 
 The UE sends a Registration Request but receives an Authentication Reject or encounters a MAC failure.
 
-### Understanding the Authentication Chain
-
-```
-UE (K, OPc)  ←→  Network (K, OPc from MongoDB)
-```
-
-Both sides must have **identical** values for K and OPc. The authentication algorithm (Milenage for 5G-AKA) uses these to compute challenge-response values. Any mismatch produces a MAC failure.
-
 ### Credential Reference for This Lab
 
-| Credential | UE Config (`open5gs-ue.yaml`) | MongoDB Subscriber |
-|------------|-------------------------------|-------------------|
-| **SUPI** | `imsi-001010000000001` | `imsi: '001010000000001'` |
-| **K** | `465B5CE8B199B49FAA5F0A2EE238A6BC` | `security.k` |
-| **OPc** | `E8ED2441347B7990E92C19B0316CD6FC` | `security.opc` |
-| **AMF** | `8000` | `security.amf` |
+| Subscriber | IMSI | K | OPc | AMF |
+|---|---|---|---|---|
+| **UE1** | `001010000000001` | `465B5CE8B199B49FAA5F0A2EE238A6BC` | `E8ED2441347B7990E92C19B0316CD6FC` | `8000` |
+| **UE2** | `001010000000002` | `465B5CE8B199B49FAA5F0A2EE238A6BD` | `E8ED2441347B7990E92C19B0316CD6FC` | `8000` |
 
 ### Verification
 
 ```bash
-# Check UE-side credentials
-grep -E 'key:|op:|opType:|amf:' configs/ueransim/open5gs-ue.yaml
-
-# Check network-side credentials (MongoDB)
-mongosh --quiet --eval '
+# Check MongoDB subscriber records in Kubernetes
+kubectl -n open5gs exec mongodb-0 -- mongosh --quiet --eval '
   db = db.getSiblingDB("open5gs");
-  sub = db.subscribers.findOne({imsi: "001010000000001"});
-  print("K:   " + sub.security.k);
-  print("OPc: " + sub.security.opc);
-  print("AMF: " + sub.security.amf);
+  db.subscribers.find({}, {imsi: 1, "security.k": 1, "security.opc": 1});
 '
 ```
 
-### Common Authentication Issues
+### Subscriber Provisioning Helper
 
-| Symptom | Likely Cause | Fix |
-|---------|-------------|-----|
-| `MAC failure` in UE logs | K or OPc mismatch | Align credentials between UE config and MongoDB |
-| `SQN failure` | Sequence number out of sync | Reset SQN in MongoDB or re-provision subscriber |
-| `Authentication Reject` from AMF | SUPI not found in subscriber DB | Add subscriber using `scripts/add-subscriber.sh` |
-| No Authentication Request received | AUSF or UDM not running | Check `systemctl status open5gs-ausfd open5gs-udmd` |
-
-### SQN Synchronization Issue
-
-The Sequence Number (SQN) is a counter that prevents replay attacks. The UE and network each maintain a SQN. If the network's SQN gets too far ahead of the UE's (e.g., after database restoration), authentication fails.
+If subscriber records are missing or corrupted, re-provision using the lab script:
 
 ```bash
-# Check current SQN in MongoDB
-mongosh --quiet --eval '
-  db = db.getSiblingDB("open5gs");
-  sub = db.subscribers.findOne({imsi: "001010000000001"});
-  print("SQN: " + sub.security.sqn);
-'
-
-# Reset SQN if needed (use with caution)
-mongosh --quiet --eval '
-  db = db.getSiblingDB("open5gs");
-  db.subscribers.updateOne(
-    {imsi: "001010000000001"},
-    {$set: {"security.sqn": NumberLong(0)}}
-  );
-  print("SQN reset to 0");
-'
+bash scripts/add-subscriber.sh all
 ```
 
 ---
 
 ## Diagnostic Checklist
 
-A quick-reference checklist for systematic debugging:
-
-```
+```text
 PDU Session Failure:
-├── UE registered?
+├── UE registered (MM-REGISTERED)?
 │   ├── Yes → Check DNN match (UE ↔ SMF ↔ UPF)
-│   │         Check S-NSSAI match (SST/SD across all configs)
-│   │         Check PFCP association (SMF ↔ UPF)
-│   └── No  → Check authentication (see Scenario 3)
+│   │         Check S-NSSAI match (SST: 1, SD: 0xFFFFFF)
+│   │         Check PFCP association (SMF ↔ UPF on :8805)
+│   └── No  → Check 5G-AKA authentication (K / OPc / SQN in MongoDB)
 │
-├── UE has IP?
-│   ├── Yes → Check ogstun interface (ip addr show ogstun)
-│   │         Check IP forwarding (sysctl net.ipv4.ip_forward)
-│   │         Check iptables NAT (iptables -t nat -L)
-│   └── No  → Check UPF session config (subnet, gateway)
+├── UE has dynamic IP?
+│   ├── Yes → Check ogstun interface in kind node (10.45.0.1 / 10.46.0.1)
+│   │         Check IP forwarding (sysctl net.ipv4.ip_forward = 1)
+│   │         Check reverse path filtering (rp_filter = 0)
+│   └── No  → Check UPF session pool exhaustion or SMF routing
 │
-└── Internet works?
-    ├── Yes → Done ✅
-    └── No  → Check DNS (try ping by IP first)
-              Check default route in UE namespace
-              Check host's internet connectivity
+└── Services reachable?
+    ├── Internet: ping 8.8.8.8 / curl https://www.google.com
+    └── IMS: ping 10.46.0.1 / validate SIP OPTIONS on 10.46.0.1:5060
 ```
 
 ---

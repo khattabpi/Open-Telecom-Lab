@@ -1,45 +1,46 @@
-# ─── Build artifacts ────────────────────────────────────────────
+# ─── Build Artifacts & Binaries ────────────────────────────────
 build/
+dist/
 cmake-build-*/
 *.o
 *.so
 *.a
+UERANSIM/
 
-# ─── OS / Editor ────────────────────────────────────────────────
+# ─── Operating System & Editor Metadata ────────────────────────
 .DS_Store
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
+*.bak
+*.tmp
 
-# ─── Logs ───────────────────────────────────────────────────────
+# ─── Runtime Logs & Captures ───────────────────────────────────
 *.log
 logs/
-
-# ─── Large PCAP files (store as GitHub Releases) ────────────────
 *.pcap
 *.pcapng
-!assets/captures/.gitkeep
 
-# ─── Secrets (never commit real credentials) ────────────────────
+# ─── Secrets & Environment Overrides ───────────────────────────
 *.pem
 *.key
 *.crt
 .env
 .env.*
 
-# ─── Node / Python artifacts ───────────────────────────────────
-node_modules/
+# ─── Python Artifacts & Virtual Environments ───────────────────
 __pycache__/
 *.pyc
+*.pyo
 .venv/
+.pytest_cache/
 
-# ─── Docker (future) ───────────────────────────────────────────
+# ─── Node & Container Artifacts ────────────────────────────────
+node_modules/
 .docker/
-
-# ─── Terraform / Cloud (future) ────────────────────────────────
+.terraform/
 *.tfstate
 *.tfstate.backup
-.terraform/
-UERANSIM

@@ -1,92 +1,57 @@
-# Open Telecom Lab — Roadmap
+# 5G-IMS-Lab — Project Roadmap
 
-> Living document tracking the evolution of the project from a 5G SA lab to a full-scale cloud-native telecom platform.
-
----
-
-## 🟢 v1.0 — 5G SA Foundation `RELEASED`
-
-- [x] Open5GS 5G Core deployment (native Ubuntu)
-- [x] UERANSIM gNodeB + UE integration
-- [x] UE Registration & 5G-AKA Authentication
-- [x] PDU Session Establishment (IPv4)
-- [x] User Plane connectivity & internet access
-- [x] MongoDB subscriber provisioning
-- [x] tcpdump / Wireshark packet captures
-- [x] Repository structure & documentation
-
-## 🔄 v1.x — Protocol Deep-Dives `IN PROGRESS`
-
-- [ ] NAS message walkthrough (Registration, Authentication, PDU Session)
-- [ ] NGAP procedure analysis (Initial UE Message, Initial Context Setup)
-- [ ] PFCP session walkthrough (Session Establishment, Modification)
-- [ ] GTP-U tunnel analysis (encapsulation, decapsulation)
-- [ ] Wireshark display filters & coloring rules for 5G protocols
-- [ ] Annotated PCAP samples with step-by-step guides
-
-## 🟢 v2.x — IMS & Voice Services `PLANNED`
-
-- [ ] IMS Core deployment (Kamailio / Open5GS IMS)
-- [ ] SIP registration and call setup
-- [ ] VoLTE / VoNR call flow
-- [ ] RTP media stream analysis
-- [ ] SIP/SDP message walkthrough
-- [ ] Call flow sequence diagrams
-
-## 📋 v3.x — LTE Comparison & Mobility `PLANNED`
-
-- [ ] LTE EPC deployment (MME, SGW, PGW)
-- [ ] EPC vs 5GC architecture comparison
-- [ ] Inter-RAT mobility procedures
-- [ ] Xn / N2 handover analysis
-- [ ] Tracking Area Update procedures
-
-## 📋 v4.x — Docker Deployment `PLANNED`
-
-- [ ] Dockerfiles for Open5GS NFs
-- [ ] Docker Compose orchestration
-- [ ] Multi-container networking
-- [ ] Persistent volume configuration
-- [ ] Environment-based configuration
-
-## 📋 v5.x — Kubernetes Deployment `PLANNED`
-
-- [ ] Helm charts for 5G Core
-- [ ] StatefulSet for NFs with state
-- [ ] Service mesh integration
-- [ ] Horizontal Pod Autoscaling
-- [ ] Network policies for NF isolation
-
-## 📋 v6.x — Monitoring & Observability `PLANNED`
-
-- [ ] Prometheus metrics collection
-- [ ] Grafana dashboards (NF health, UE sessions, throughput)
-- [ ] Alerting rules for SLA violations
-- [ ] Log aggregation (Loki / ELK)
-- [ ] Distributed tracing for SBI calls
-
-## 📋 v7.x — CI/CD Automation `PLANNED`
-
-- [ ] GitHub Actions workflows
-- [ ] Automated configuration validation
-- [ ] Integration testing pipeline
-- [ ] Documentation build & deploy
-- [ ] Release automation
-
-## 📋 v8.x — Cloud Deployment `PLANNED`
-
-- [ ] OpenStack deployment guide
-- [ ] K3s lightweight Kubernetes setup
-- [ ] AWS deployment (optional)
-- [ ] Multi-site / multi-cluster topology
-- [ ] Cost optimization strategies
+Living document tracking the milestones and technical roadmap for the 5G Standalone and IMS testbed.
 
 ---
 
-## Legend
+## 🟢 Milestone 1: 5G SA Core Foundation `COMPLETED`
 
-| Status | Meaning |
-|--------|---------|
-| 🟢 `RELEASED` | Implemented and verified |
-| 🔄 `IN PROGRESS` | Currently being worked on |
-| 📋 `PLANNED` | Scoped but not started |
+- [x] Open5GS 5G Core control plane deployment (AMF, SMF, AUSF, UDM, UDR, PCF, NRF, BSF)
+- [x] UERANSIM gNodeB + UE simulation
+- [x] 5G-AKA authentication & NAS security context establishment
+- [x] IPv4 PDU session establishment (`internet` DNN, SST:1, SD:0xFFFFFF)
+- [x] GTP-U user plane tunneling over kernel TUN (`ogstun`)
+- [x] Data plane internet routing and HTTPS egress validation
+
+---
+
+## 🟢 Milestone 2: Cloud-Native & Multi-UE Infrastructure `COMPLETED`
+
+- [x] Kubernetes (`kind`) container orchestration for 5G Core network functions
+- [x] Multi-UE simulation with independent IMSIs (`001010000000001` and `001010000000002`)
+- [x] Linux network namespace isolation for parallel UE data planes
+- [x] Concurrent dual PDU sessions per UE (`internet` + `ims` bearers)
+- [x] Dynamic IPv4 address pool management (`10.45.0.0/16` and `10.46.0.0/16`)
+- [x] Host kernel networking automation (IP forwarding, NAT MASQUERADE, rp_filter tuning)
+
+---
+
+## 🟢 Milestone 3: IMS Service Layer & Media Proxy `COMPLETED`
+
+- [x] Kamailio P-CSCF deployment with `hostNetwork` ingress (`10.46.0.1:5060`)
+- [x] Kamailio I-CSCF routing and domain resolution (`ims.lab`)
+- [x] Kamailio S-CSCF registrar with SQLite subscriber credentials and Digest MD5 auth
+- [x] RFC 3327 `Path` header support for NAT traversal to UE endpoints
+- [x] RTPEngine media proxy deployment with NG control protocol (`22222/UDP`)
+- [x] Automated SDP offer/answer rewriting to RTPEngine relay endpoints (`20000-20100/UDP`)
+- [x] End-to-end SIP call flow (`INVITE` -> `180 Ringing` -> `200 OK` -> `ACK` -> `BYE`)
+- [x] Bidirectional RTP voice stream exchange (G.711 PCMU, 0% packet loss)
+
+---
+
+## 🟢 Milestone 4: Comprehensive Test Automation & Regression `COMPLETED`
+
+- [x] Standalone 22-step IMS infrastructure validation suite (`scripts/validate-ims-call.sh`)
+- [x] Dedicated SIP dialog and RTPEngine media verification runner (`scripts/test-ims-call.sh`)
+- [x] Complete 55-check 5G SA + IMS regression test suite (`scripts/verify-lab.sh`)
+- [x] Monotonic CSeq verification across repeated registrations
+- [x] Controlled negative testing (invalid credentials, unregistered destinations, malformed packets)
+- [x] Detailed protocol analysis and live trace documentation (`docs/IMS-CALL-FLOW-VALIDATION.md`)
+
+---
+
+## 📋 Future Enhancements
+
+- [ ] TLS / SRTP signaling and media encryption validation
+- [ ] Diameter / Rx interface integration between P-CSCF and PCF for dynamic QoS policy
+- [ ] Multi-cell handovers and mobility scenarios with UERANSIM

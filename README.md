@@ -271,9 +271,9 @@ sudo ip netns exec <ims-netns> tcpdump -i uesimtun0 -n -s 0 -w sip.pcap
 ## Documentation
 
 - [IMS Call Flow Validation](docs/IMS-CALL-FLOW-VALIDATION.md)
-- [5G Registration Protocol Analysis](docs/engineering-notes/5g-registration-analysis.md)
-- [Linux Networking and Namespace Architecture](docs/engineering-notes/linux-networking-behind-5g.md)
-- [PDU Session Establishment and Debugging](docs/engineering-notes/debugging-pdu-session.md)
+- [5G SA Network & IMS Architecture](docs/architecture/README.md)
+- [Linux Networking & Namespace Architecture](docs/engineering-notes/linux-networking-behind-5g.md)
+- [PDU Session Establishment & Debugging](docs/engineering-notes/debugging-pdu-session.md)
 - [IMS Manifest Architecture](k8s/ims/README.md)
 
 ## Limitations

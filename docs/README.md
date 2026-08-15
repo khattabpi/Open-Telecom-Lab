@@ -1,38 +1,16 @@
 # Documentation Index
 
-> Organized reference to all documentation in Open Telecom Lab.
+> Reference index for technical architecture, validation, and troubleshooting in 5G-IMS-Lab.
 
 ---
 
-## 📐 Architecture
+## 📐 Architecture & IMS Call Flow
 
-- [Network Architecture](architecture/README.md) — 5G SA SBA overview, NF roles, IP address plan, reference points
+- [5G SA Network & IMS Architecture](architecture/README.md) — 5G SA SBA overview, NF roles, reference points, Kubernetes pod topology, and IP address plan.
+- [IMS Call Flow Validation & Live Traces](IMS-CALL-FLOW-VALIDATION.md) — Live SIP traces, RTPEngine media path, root-cause analysis, and verification procedures.
+- [IMS Manifest Architecture](../k8s/ims/README.md) — Kamailio P/I/S-CSCF and RTPEngine manifest design, module ordering, and subscriber credentials.
 
-## 🔬 Engineering Notes
+## 🔬 System Networking & Troubleshooting
 
-In-depth technical analysis written for junior telecom engineers and 5G core engineers:
-
-- [Why Open5GS](engineering-notes/why-open5gs.md) — Selection rationale, comparison with alternatives, lab limitations
-- [Understanding AMF](engineering-notes/understanding-amf.md) — AMF responsibilities, interfaces (N1/N2/SBI), interaction map
-- [5G Registration Analysis](engineering-notes/5g-registration-analysis.md) — Step-by-step registration procedure with protocol mapping
-- [Debugging PDU Session](engineering-notes/debugging-pdu-session.md) — Real troubleshooting: DNN mismatch, PFCP failures, NAT issues
-- [Linux Networking Behind 5G](engineering-notes/linux-networking-behind-5g.md) — Namespaces, TUN interfaces, GTP-U, iptables NAT
-
-## 📡 Protocols *(Planned — v1.x)*
-
-- `protocols/nas/` — NAS message walkthroughs
-- `protocols/ngap/` — NGAP procedure analysis
-- `protocols/pfcp/` — PFCP session deep-dive
-- `protocols/gtp-u/` — GTP-U tunnel analysis
-
-## 🔍 Wireshark *(Planned — v1.x)*
-
-- `wireshark/` — Capture guides, display filters, coloring rules
-
-## 🔧 Troubleshooting
-
-- `troubleshooting/` — Common issues and fixes
-
-## 📚 Learning Outcomes
-
-- `learning-outcomes/` — Key takeaways per lab exercise
+- [Linux Networking & Namespace Architecture](engineering-notes/linux-networking-behind-5g.md) — Network namespaces, TUN interfaces (`ogstun`, `uesimtun`), GTP-U encapsulation, and NAT.
+- [PDU Session Establishment & Debugging](engineering-notes/debugging-pdu-session.md) — Troubleshooting PDU session creation, PFCP transactions, and UPF routing.
