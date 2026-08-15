@@ -466,6 +466,12 @@ if TARGET in ["all", "roaming", "ue1-ue3"]:
     time.sleep(0.3)
     results.append(measure_call_kpis("ue1", "ue3", "Inter-PLMN Roaming Vo5G IMS Voice Call"))
 
+try:
+    with open('/tmp/kpi-latest.json', 'w') as f:
+        json.dump(results, f, indent=2)
+except Exception:
+    pass
+
 if FORMAT == "json":
     print(json.dumps(results, indent=2))
     sys.exit(0)

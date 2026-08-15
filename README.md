@@ -351,21 +351,28 @@ To ensure technical maturity and avoid exaggerated claims, the boundaries of thi
 │   ├── upf.yaml                       # UPF deployment with Linux tc QoS
 │   ├── mongodb.yaml                   # Subscriber database
 │   ├── kind-config.yaml               # Kubernetes kind cluster manifest
-│   └── ims/
-│       ├── configmap.yaml             # Kamailio configurations & SQLite init
-│       ├── pcscf.yaml                 # P-CSCF deployment
-│       ├── icscf.yaml                 # I-CSCF deployment
-│       ├── scscf.yaml                 # S-CSCF deployment (CDR accounting)
-│       └── rtpengine.yaml             # RTPEngine media proxy
+│   ├── ims/
+│   │   ├── configmap.yaml             # Kamailio configurations & SQLite init
+│   │   ├── pcscf.yaml                 # P-CSCF deployment
+│   │   ├── icscf.yaml                 # I-CSCF deployment
+│   │   ├── scscf.yaml                 # S-CSCF deployment (CDR accounting)
+│   │   └── rtpengine.yaml             # RTPEngine media proxy
+│   └── monitoring/
+│       ├── namespace.yaml             # Monitoring namespace
+│       ├── rbac.yaml                  # Telecom monitoring ClusterRole & ServiceAccount
+│       ├── telecom-exporter.yaml      # Custom Telecom Metrics Exporter (:9100)
+│       └── prometheus.yaml            # Prometheus server deployment & scrape config
 └── scripts/
-    ├── start-lab.sh                   # Initializes 5GC and IMS pods
+    ├── start-lab.sh                   # Initializes 5GC, IMS, and Prometheus pods
     ├── run-gnb.sh                     # Starts isolated Home & Visited UERANSIM gNodeBs
     ├── run-ue.sh                      # Manages UERANSIM UE instances (1, 2, 3)
     ├── test-ims-call.sh               # Executes multi-PLMN SIP registrations and calls
     ├── collect-charging-records.sh    # Queries SQLite CDRs and netns usage counters
     ├── measure-kpis.sh                # Real-time PDD, CST, CSSR, jitter, and MOS engine
+    ├── telecom-exporter.py            # 7-domain Prometheus OpenMetrics exporter
     ├── add-subscriber.sh              # Adds subscribers to MongoDB
     ├── validate-ims-call.sh           # Validates IMS call signaling and logs
+    ├── verify-observability.sh        # Phase 5.2 Prometheus & Telemetry test suite
     └── verify-lab.sh                  # Official 91-test regression verification suite
 ```
 
@@ -376,7 +383,7 @@ To ensure technical maturity and avoid exaggerated claims, the boundaries of thi
 Execute the complete end-to-end operational workflow using `sudo`:
 
 ```bash
-# 1. Start the 5G Core and IMS infrastructure on Kubernetes
+# 1. Start the 5G Core, IMS, and Prometheus infrastructure on Kubernetes
 sudo bash scripts/start-lab.sh
 
 # 2. Launch the isolated Home and Visited gNodeB instances
@@ -394,7 +401,10 @@ sudo bash scripts/collect-charging-records.sh
 # 6. Measure real-time service assurance KPIs
 sudo bash scripts/measure-kpis.sh
 
-# 7. Run the official 91-test automated regression suite
+# 7. Run the dedicated Prometheus Observability verification suite
+./scripts/verify-observability.sh
+
+# 8. Run the official 91-test automated regression suite
 sudo bash scripts/verify-lab.sh
 ```
 
@@ -402,17 +412,20 @@ sudo bash scripts/verify-lab.sh
 
 ## Project Phases
 
-Development was structured across four engineering milestones:
+Development is structured across the following milestones:
 
 1. **Phase 1: 5G SA Core Foundation.** Established basic 5G connectivity, 5G-AKA authentication, and single-UE Internet access.
 2. **Phase 2: Multi-UE & Dual PDU Sessions.** Expanded to three UEs and established parallel Internet (`10.45.0.0/16`) and IMS (`10.46.0.0/16`) PDU sessions.
 3. **Phase 3: IMS & Roaming Integration.** Deployed Kamailio P/I/S-CSCF, RTPEngine, SIP registration, domestic voice, and inter-PLMN LBO roaming (`602/03` ↔ `218/90`) with isolated Home/Visited RAN domains.
 4. **Phase 4: QoS, Charging & Assurance.** Implemented Linux `tc` 3-band queueing, PCF/BSF static policy validation, offline SQLite CDR accounting, user-plane telemetry, and the real-time KPI engine.
+5. **Phase 5: Telecom Operations & Observability.** (In Progress)
+   - **Phase 5.1:** 3-tier Observability Architecture & 7-domain standardized metrics model definition.
+   - **Phase 5.2:** Prometheus deployment in `monitoring` namespace, continuous `telecom-exporter` scraping (5s interval), and live PromQL query validation.
 
 ---
 
 ## Conclusion
 
-5G-IMS-Lab demonstrates a real, multi-component, end-to-end telecom laboratory. It validates 5G SA, multi-UE operation, dual PDU sessions, isolated Home/Visited RAN domains, multi-PLMN LBO roaming, IMS SIP registration, domestic and inter-PLMN voice, bidirectional RTP, QoS/DiffServ classification, PCF/BSF static policy, offline CDR accounting, user-plane usage telemetry, and service assurance KPIs.
+5G-IMS-Lab demonstrates a real, multi-component, end-to-end telecom laboratory. It validates 5G SA, multi-UE operation, dual PDU sessions, isolated Home/Visited RAN domains, multi-PLMN LBO roaming, IMS SIP registration, domestic and inter-PLMN voice, bidirectional RTP, QoS/DiffServ classification, PCF/BSF static policy, offline CDR accounting, user-plane usage telemetry, service assurance KPIs, and continuous Prometheus observability.
 
-The project is validated by a 91/91 automated regression suite, with explicit engineering boundaries documented where production-scope 3GPP functionality is intentionally out of scope.
+The project is validated by a 91/91 automated regression suite and a 19/19 dedicated observability suite, with explicit engineering boundaries documented where production-scope 3GPP functionality is intentionally out of scope.

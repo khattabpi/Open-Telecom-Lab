@@ -130,6 +130,14 @@ apply_manifests() {
     kubectl apply -f "${REPO_ROOT}/k8s/ims/icscf.yaml"
     kubectl apply -f "${REPO_ROOT}/k8s/ims/pcscf.yaml"
   fi
+
+  if [ -d "${REPO_ROOT}/k8s/monitoring" ]; then
+    log "Applying Prometheus Observability manifests in ${REPO_ROOT}/k8s/monitoring/..."
+    kubectl apply -f "${REPO_ROOT}/k8s/monitoring/namespace.yaml"
+    kubectl apply -f "${REPO_ROOT}/k8s/monitoring/rbac.yaml"
+    kubectl apply -f "${REPO_ROOT}/k8s/monitoring/telecom-exporter.yaml"
+    kubectl apply -f "${REPO_ROOT}/k8s/monitoring/prometheus.yaml"
+  fi
 }
 
 # --- 6. Wait for pods -------------------------------------------------------
@@ -148,6 +156,14 @@ wait_for_pods() {
       kubectl -n "${IMS_NAMESPACE}" rollout status "deployment/${dep}" --timeout="${POD_WAIT_TIMEOUT}"
     done
     pass "All Kamailio IMS deployments are Ready."
+  fi
+
+  if kubectl get ns monitoring >/dev/null 2>&1; then
+    log "Waiting for Prometheus monitoring deployments to become Ready..."
+    for dep in telecom-exporter prometheus; do
+      kubectl -n monitoring rollout status "deployment/${dep}" --timeout="${POD_WAIT_TIMEOUT}"
+    done
+    pass "All Prometheus Observability deployments are Ready."
   fi
 }
 
