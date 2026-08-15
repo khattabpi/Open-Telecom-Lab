@@ -269,3 +269,65 @@ data:
               summary: "Inter-PLMN roaming call success rate dropped to {{ $value }}%"
               description: "International/Inter-PLMN voice call completion rate is below SLA."
               runbook: "sudo bash scripts/test-ims-call.sh roaming"
+
+      - name: telecom_rating_charging_alerts
+        rules:
+          - alert: ChargingReconciliationFailed
+            expr: charging_reconciliation_failures_total > 0
+            for: 5s
+            labels:
+              severity: critical
+              layer: charging-billing
+              component: rating-engine
+            annotations:
+              summary: "Financial reconciliation audit detected anomalies ({{ $value }})"
+              description: "Mismatch between account balances, transaction journal, and rated usage records."
+              runbook: "python3 scripts/rating-engine.py reconcile"
+
+          - alert: ChargingBalanceIntegrityFailure
+            expr: charging_balance_available_total < 0
+            for: 5s
+            labels:
+              severity: critical
+              layer: charging-billing
+              component: balance-manager
+            annotations:
+              summary: "Aggregate available balance has dropped below zero ({{ $value }})"
+              description: "Negative balance detected in prepaid charging accounts violates non-negative constraint."
+              runbook: "python3 scripts/rating-engine.py report"
+
+          - alert: ChargingActiveAccountsZero
+            expr: charging_active_accounts == 0
+            for: 10s
+            labels:
+              severity: warning
+              layer: charging-billing
+              component: balance-manager
+            annotations:
+              summary: "Zero active prepaid subscriber charging accounts found"
+              description: "Subscriber accounts have not been initialized or all accounts are suspended."
+              runbook: "python3 scripts/rating-engine.py init-db"
+
+          - alert: ChargingUnratedUsageHigh
+            expr: (charging_cdr_records_total - on() sum(charging_usage_rated_total)) > 50
+            for: 1m
+            labels:
+              severity: warning
+              layer: charging-billing
+              component: rating-engine
+            annotations:
+              summary: "Unrated CDR backlog exceeds 50 records"
+              description: "CDR generation is outpacing rating engine ingestion."
+              runbook: "python3 scripts/rating-engine.py rate-cdrs"
+
+          - alert: ChargingInsufficientBalanceSpike
+            expr: rate(charging_insufficient_balance_total[5m]) > 0.5
+            for: 1m
+            labels:
+              severity: warning
+              layer: charging-billing
+              component: rating-engine
+            annotations:
+              summary: "High rate of call attempts rejected due to insufficient prepaid balance"
+              description: "Subscribers are exhausting balances without top-up activity."
+              runbook: "python3 scripts/rating-engine.py report"
