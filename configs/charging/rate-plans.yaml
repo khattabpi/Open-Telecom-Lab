@@ -1,0 +1,25 @@
+# Rate Plans Configuration for 5G-IMS-Lab Offline Rating Engine
+rate_plans:
+  - id: "standard-prepaid"
+    name: "Standard 5G SA Prepaid"
+    description: "Default prepaid rate plan for retail domestic and roaming subscribers"
+    currency: "LAB"
+    tariffs:
+      - "tariff-domestic-voice"
+      - "tariff-roaming-voice"
+      - "tariff-domestic-data-internet"
+      - "tariff-domestic-data-ims"
+      - "tariff-roaming-data-internet"
+      - "tariff-roaming-data-ims"
+
+  - id: "premium-roaming"
+    name: "Premium Roaming 5G"
+    description: "Discounted roaming voice and data tariff plan for frequent travelers"
+    currency: "LAB"
+    tariffs:
+      - "tariff-domestic-voice"
+      - "tariff-premium-roaming-voice"
+      - "tariff-domestic-data-internet"
+      - "tariff-domestic-data-ims"
+      - "tariff-premium-roaming-data"
+      - "tariff-roaming-data-ims"

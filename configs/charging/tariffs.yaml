@@ -1,0 +1,109 @@
+# Tariffs & Rating Rules for 5G-IMS-Lab Rating Engine
+tariffs:
+  # --------------------------------------------------------------------------
+  # 1. Domestic Voice Rating (Home PLMN 602/03 <-> Home PLMN 602/04)
+  # --------------------------------------------------------------------------
+  - id: "tariff-domestic-voice"
+    rate_plan_id: "standard-prepaid"
+    service_type: "voice"
+    destination_type: "domestic"
+    dnn: "any"
+    setup_charge: 0.05           # Fixed connection setup fee
+    unit_rate: 0.02              # 0.02 credits per second (1.20 credits/min)
+    unit_size: 1                 # 1 second rating intervals
+    min_units: 1                 # Minimum 1 second billable duration
+    granularity_units: 1         # 1-second increments
+    rounding_policy: "CEIL"      # Ceiling rounding
+
+  # --------------------------------------------------------------------------
+  # 2. Inter-PLMN Roaming Voice Rating (HPLMN 602/03 <-> VPLMN 218/90 Bosnia LBO)
+  # --------------------------------------------------------------------------
+  - id: "tariff-roaming-voice"
+    rate_plan_id: "standard-prepaid"
+    service_type: "voice"
+    destination_type: "roaming_vplmn"
+    dnn: "any"
+    setup_charge: 0.15           # Roaming connection setup fee
+    unit_rate: 0.08              # 0.08 credits per second (4.80 credits/min)
+    unit_size: 1
+    min_units: 1
+    granularity_units: 1
+    rounding_policy: "CEIL"
+
+  - id: "tariff-premium-roaming-voice"
+    rate_plan_id: "premium-roaming"
+    service_type: "voice"
+    destination_type: "roaming_vplmn"
+    dnn: "any"
+    setup_charge: 0.10
+    unit_rate: 0.04              # Discounted roaming rate (2.40 credits/min)
+    unit_size: 1
+    min_units: 1
+    granularity_units: 1
+    rounding_policy: "CEIL"
+
+  # --------------------------------------------------------------------------
+  # 3. Domestic Data Rating (DNN: internet vs ims)
+  # --------------------------------------------------------------------------
+  - id: "tariff-domestic-data-internet"
+    rate_plan_id: "standard-prepaid"
+    service_type: "data"
+    destination_type: "domestic"
+    dnn: "internet"
+    setup_charge: 0.00
+    unit_rate: 0.01              # 0.01 credits per MB
+    unit_size: 1048576           # 1 MB in bytes (1024 * 1024)
+    min_units: 1024              # Minimum 1 KB
+    granularity_units: 1024      # 1 KB rounding blocks
+    rounding_policy: "CEIL"
+
+  - id: "tariff-domestic-data-ims"
+    rate_plan_id: "standard-prepaid"
+    service_type: "data"
+    destination_type: "domestic"
+    dnn: "ims"
+    setup_charge: 0.00
+    unit_rate: 0.00              # Zero-rated IMS Signaling bearer (Free Vo5G control plane)
+    unit_size: 1048576
+    min_units: 1024
+    granularity_units: 1024
+    rounding_policy: "CEIL"
+
+  # --------------------------------------------------------------------------
+  # 4. Roaming Data Rating (VPLMN 218/90)
+  # --------------------------------------------------------------------------
+  - id: "tariff-roaming-data-internet"
+    rate_plan_id: "standard-prepaid"
+    service_type: "data"
+    destination_type: "roaming_vplmn"
+    dnn: "internet"
+    setup_charge: 0.00
+    unit_rate: 0.05              # 0.05 credits per MB roaming
+    unit_size: 1048576
+    min_units: 1024
+    granularity_units: 1024
+    rounding_policy: "CEIL"
+
+  - id: "tariff-premium-roaming-data"
+    rate_plan_id: "premium-roaming"
+    service_type: "data"
+    destination_type: "roaming_vplmn"
+    dnn: "internet"
+    setup_charge: 0.00
+    unit_rate: 0.025             # Discounted premium roaming data
+    unit_size: 1048576
+    min_units: 1024
+    granularity_units: 1024
+    rounding_policy: "CEIL"
+
+  - id: "tariff-roaming-data-ims"
+    rate_plan_id: "standard-prepaid"
+    service_type: "data"
+    destination_type: "roaming_vplmn"
+    dnn: "ims"
+    setup_charge: 0.00
+    unit_rate: 0.00              # Zero-rated roaming IMS signaling bearer
+    unit_size: 1048576
+    min_units: 1024
+    granularity_units: 1024
+    rounding_policy: "CEIL"
