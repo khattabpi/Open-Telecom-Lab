@@ -132,11 +132,17 @@ apply_manifests() {
   fi
 
   if [ -d "${REPO_ROOT}/k8s/monitoring" ]; then
-    log "Applying Prometheus Observability manifests in ${REPO_ROOT}/k8s/monitoring/..."
+    log "Applying Prometheus & Grafana Observability manifests in ${REPO_ROOT}/k8s/monitoring/..."
     kubectl apply -f "${REPO_ROOT}/k8s/monitoring/namespace.yaml"
     kubectl apply -f "${REPO_ROOT}/k8s/monitoring/rbac.yaml"
     kubectl apply -f "${REPO_ROOT}/k8s/monitoring/telecom-exporter.yaml"
     kubectl apply -f "${REPO_ROOT}/k8s/monitoring/prometheus.yaml"
+    if [ -f "${REPO_ROOT}/k8s/monitoring/grafana-dashboard-configmap.yaml" ]; then
+      kubectl apply -f "${REPO_ROOT}/k8s/monitoring/grafana-dashboard-configmap.yaml"
+    fi
+    if [ -f "${REPO_ROOT}/k8s/monitoring/grafana.yaml" ]; then
+      kubectl apply -f "${REPO_ROOT}/k8s/monitoring/grafana.yaml"
+    fi
   fi
 }
 
@@ -159,11 +165,11 @@ wait_for_pods() {
   fi
 
   if kubectl get ns monitoring >/dev/null 2>&1; then
-    log "Waiting for Prometheus monitoring deployments to become Ready..."
-    for dep in telecom-exporter prometheus; do
+    log "Waiting for Observability deployments (Prometheus & Grafana) to become Ready..."
+    for dep in telecom-exporter prometheus grafana; do
       kubectl -n monitoring rollout status "deployment/${dep}" --timeout="${POD_WAIT_TIMEOUT}"
     done
-    pass "All Prometheus Observability deployments are Ready."
+    pass "All Prometheus & Grafana Observability deployments are Ready."
   fi
 }
 
@@ -186,11 +192,16 @@ print_status() {
   log "Kamailio IMS Pods (namespace: ${IMS_NAMESPACE}):"
   kubectl get pods -n "${IMS_NAMESPACE}" -o wide
   echo
+  log "Observability Pods (namespace: monitoring):"
+  kubectl get pods -n monitoring -o wide
+  echo
   log "Node IP (AMF/UPF endpoint): ${NODE_IP}"
   log "AMF NGAP (SCTP N2):          ${NODE_IP}:38412"
   log "UPF GTP-U (UDP N3):          ${NODE_IP}:2152"
   log "UPF PFCP  (UDP N4):          ${NODE_IP}:8805"
   log "P-CSCF SIP (UDP/TCP):        10.46.0.1:5060"
+  log "Prometheus Server:           http://${NODE_IP}:30090"
+  log "Grafana Operations Dashboard:http://${NODE_IP}:30300"
   echo
   log "To start RAN simulation (Isolated Home & Visited gNodeBs):"
   echo "    sudo bash scripts/run-gnb.sh all"
