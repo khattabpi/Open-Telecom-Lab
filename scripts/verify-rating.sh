@@ -153,7 +153,7 @@ else
     check_fail "[RATING-07] Domestic Voice Rating" "expected 0.0900:domestic, got $DOM_COST"
 fi
 
-# Roaming Voice Rating Test (setup=0.15, rate=0.08/s) -> 2s call = 0.15 + 0.16 = 0.31
+# Roaming Voice Rating Test - Terminating (setup=0.15, rate=0.08/s) -> 2s call = 0.15 + 0.16 = 0.31
 ROAM_COST=$(python3 -c "
 from src.charging import RatingEngine, UsageEvent
 re = RatingEngine()
@@ -163,9 +163,24 @@ print(f'{rated.total_charge:.4f}:{rated.destination_type}')
 ")
 
 if [[ "$ROAM_COST" == "0.3100:roaming_vplmn" ]]; then
-    check_pass "[RATING-08] Roaming Voice Rating" "setup 0.15 + (2s * 0.08) = 0.3100 LAB (roaming_vplmn)"
+    check_pass "[RATING-08] Roaming Terminating Voice Rating" "setup 0.15 + (2s * 0.08) = 0.3100 LAB (roaming_vplmn)"
 else
-    check_fail "[RATING-08] Roaming Voice Rating" "expected 0.3100:roaming_vplmn, got $ROAM_COST"
+    check_fail "[RATING-08] Roaming Terminating Voice Rating" "expected 0.3100:roaming_vplmn, got $ROAM_COST"
+fi
+
+# Roaming Voice Rating Test - Originating Roaming Subscriber (serving_plmn=218/90, plan=premium-roaming) -> 10s = 0.10 + 0.40 = 0.50
+ROAM_ORIG_COST=$(python3 -c "
+from src.charging import RatingEngine, UsageEvent
+re = RatingEngine()
+event = UsageEvent(id='test-roam-orig-1', source='unit_test', service_type='voice', caller_id='acc-ue3', caller_uri='sip:ue3@ims.lab', callee_uri='sip:ue1@ims.lab', duration_seconds=10.0)
+rated = re.rate_event(event)
+print(f'{rated.total_charge:.4f}:{rated.destination_type}:{rated.tariff_id}')
+")
+
+if [[ "$ROAM_ORIG_COST" == "0.5000:roaming_vplmn:tariff-premium-roaming-voice" ]]; then
+    check_pass "[RATING-09] Roaming Originating Voice Rating" "UE3 (VPLMN 218/90) 10s call rated at 0.5000 LAB (tariff-premium-roaming-voice)"
+else
+    check_fail "[RATING-09] Roaming Originating Voice Rating" "expected 0.5000:roaming_vplmn:tariff-premium-roaming-voice, got $ROAM_ORIG_COST"
 fi
 
 # Rounding policy test (1.1s -> CEIL to 2s -> 0.05 + 0.04 = 0.09)
@@ -178,9 +193,9 @@ print(f'{rated.total_charge:.4f}:{rated.billable_units}')
 ")
 
 if [[ "$ROUND_COST" == "0.0900:2.0" || "$ROUND_COST" == "0.0900:2" ]]; then
-    check_pass "[RATING-09] Duration Rounding Policy" "1.1s call correctly rounded to 2s billable units (CEIL)"
+    check_pass "[RATING-10] Duration Rounding Policy" "1.1s call correctly rounded to 2s billable units (CEIL)"
 else
-    check_fail "[RATING-09] Duration Rounding Policy" "expected 0.0900:2, got $ROUND_COST"
+    check_fail "[RATING-10] Duration Rounding Policy" "expected 0.0900:2, got $ROUND_COST"
 fi
 
 # Data usage rating (DNN: internet -> 0.01 / MB) -> 2 MB = 0.02 LAB
@@ -193,9 +208,9 @@ print(f'{rated.total_charge:.4f}:{rated.destination_type}')
 ")
 
 if [[ "$DATA_COST" == "0.0200:domestic" ]]; then
-    check_pass "[RATING-10] Data Usage Rating (Internet)" "2 MB internet data rated at 0.0200 LAB"
+    check_pass "[RATING-11] Data Usage Rating (Internet)" "2 MB internet data rated at 0.0200 LAB"
 else
-    check_fail "[RATING-10] Data Usage Rating (Internet)" "expected 0.0200:domestic, got $DATA_COST"
+    check_fail "[RATING-11] Data Usage Rating (Internet)" "expected 0.0200:domestic, got $DATA_COST"
 fi
 
 # Zero-rated IMS bearer
@@ -208,9 +223,9 @@ print(f'{rated.total_charge:.4f}')
 ")
 
 if [[ "$IMS_DATA_COST" == "0.0000" ]]; then
-    check_pass "[RATING-11] Zero-Rated Bearer Policy" "IMS signaling bearer zero-rated (0.0000 LAB)"
+    check_pass "[RATING-12] Zero-Rated Bearer Policy" "IMS signaling bearer zero-rated (0.0000 LAB)"
 else
-    check_fail "[RATING-11] Zero-Rated Bearer Policy" "expected 0.0000, got $IMS_DATA_COST"
+    check_fail "[RATING-12] Zero-Rated Bearer Policy" "expected 0.0000, got $IMS_DATA_COST"
 fi
 
 # ------------------------------------------------------------------------------
@@ -229,9 +244,9 @@ print(f'{ok}:{acc.balance_reserved:.2f}:{res.id if res else \"NONE\"}')
 
 RES_ID=$(echo "$RES_RES" | cut -d':' -f3)
 if echo "$RES_RES" | grep -q "True:5.00:"; then
-    check_pass "[RATING-12] Balance Reservation" "5.00 LAB successfully reserved on acc-ue2 (ID: ${RES_ID})"
+    check_pass "[RATING-13] Balance Reservation" "5.00 LAB successfully reserved on acc-ue2 (ID: ${RES_ID})"
 else
-    check_fail "[RATING-12] Balance Reservation" "reservation failed: $RES_RES"
+    check_fail "[RATING-13] Balance Reservation" "reservation failed: $RES_RES"
 fi
 
 # Consumption test (reserve 5.00, actual cost 1.50 -> consumed 1.50, refund 3.50)
@@ -244,9 +259,9 @@ print(f'{ok}:{acc.balance_reserved:.2f}:{acc.balance_consumed:.2f}')
 ")
 
 if echo "$CONS_RES" | grep -q "True:0.00:"; then
-    check_pass "[RATING-13] Reservation Consumption" "actual usage 1.50 LAB debited, 3.50 refund returned to available"
+    check_pass "[RATING-14] Reservation Consumption" "actual usage 1.50 LAB debited, 3.50 refund returned to available"
 else
-    check_fail "[RATING-13] Reservation Consumption" "consumption failed: $CONS_RES"
+    check_fail "[RATING-14] Reservation Consumption" "consumption failed: $CONS_RES"
 fi
 
 # Release test
@@ -260,9 +275,9 @@ print(f'{ok2}:{acc.balance_reserved:.2f}')
 ")
 
 if [[ "$REL_RES" == "True:0.00" ]]; then
-    check_pass "[RATING-14] Reservation Release" "unconsumed reservation released back to available balance"
+    check_pass "[RATING-15] Reservation Release" "unconsumed reservation released back to available balance"
 else
-    check_fail "[RATING-14] Reservation Release" "release operation failed: $REL_RES"
+    check_fail "[RATING-15] Reservation Release" "release operation failed: $REL_RES"
 fi
 
 # Insufficient balance test
@@ -279,9 +294,9 @@ print(f'{ok}:{acc.balance_available:.2f}:{msg}')
 ")
 
 if echo "$INSUFF_RES" | grep -q "False:0.02:Insufficient balance"; then
-    check_pass "[RATING-15] Insufficient Balance Rejection" "transaction rejected without balance corruption (0.02 preserved)"
+    check_pass "[RATING-16] Insufficient Balance Rejection" "transaction rejected without balance corruption (0.02 preserved)"
 else
-    check_fail "[RATING-15] Insufficient Balance Rejection" "insufficient balance protection failed: $INSUFF_RES"
+    check_fail "[RATING-16] Insufficient Balance Rejection" "insufficient balance protection failed: $INSUFF_RES"
 fi
 
 # Idempotency test (duplicate CDR)
@@ -299,9 +314,9 @@ print(f'{ok1}:{ok2}:{acc1 == acc2}:{\"Idempotent\" in msg2}')
 ")
 
 if [[ "$IDEMP_RES" == "True:True:True:True" ]]; then
-    check_pass "[RATING-16] Idempotency & Duplicate Protection" "duplicate CDR charge rejected without double-debiting"
+    check_pass "[RATING-17] Idempotency & Duplicate Protection" "duplicate CDR charge rejected without double-debiting"
 else
-    check_fail "[RATING-16] Idempotency & Duplicate Protection" "idempotency test failed: $IDEMP_RES"
+    check_fail "[RATING-17] Idempotency & Duplicate Protection" "idempotency test failed: $IDEMP_RES"
 fi
 
 # Transaction ledger audit
@@ -313,9 +328,9 @@ print(len(txs))
 ")
 
 if [[ "$LEDGER_RES" -gt 0 ]]; then
-    check_pass "[RATING-17] Transaction Ledger Audit" "${LEDGER_RES} immutable journal entries verified for acc-ue1"
+    check_pass "[RATING-18] Transaction Ledger Audit" "${LEDGER_RES} immutable journal entries verified for acc-ue1"
 else
-    check_fail "[RATING-17] Transaction Ledger Audit" "empty transaction ledger"
+    check_fail "[RATING-18] Transaction Ledger Audit" "empty transaction ledger"
 fi
 
 # Full reconciliation audit
@@ -324,9 +339,9 @@ REC_STATUS=$(echo "$REC_JSON" | jq -r '.status' 2>/dev/null || echo "FAIL")
 REC_ANOMALIES=$(echo "$REC_JSON" | jq -r '.anomaly_count' 2>/dev/null || echo "99")
 
 if [[ "$REC_STATUS" == "PASS" && "$REC_ANOMALIES" == "0" ]]; then
-    check_pass "[RATING-18] Financial Reconciliation Audit" "100% mathematical consistency across balances and ledger (PASS)"
+    check_pass "[RATING-19] Financial Reconciliation Audit" "100% mathematical consistency across balances and ledger (PASS)"
 else
-    check_fail "[RATING-18] Financial Reconciliation Audit" "reconciliation failed with $REC_ANOMALIES anomalies"
+    check_fail "[RATING-19] Financial Reconciliation Audit" "reconciliation failed with $REC_ANOMALIES anomalies"
 fi
 
 # ------------------------------------------------------------------------------
@@ -340,30 +355,30 @@ python3 scripts/rating-engine.py rate-cdrs >/dev/null 2>&1
 EXPORTER_REV=$(curl -s http://172.19.0.2:9100/metrics | grep "^charging_revenue_total" || echo "")
 if [[ -n "$EXPORTER_REV" ]]; then
     REV_VAL=$(echo "$EXPORTER_REV" | awk '{print $2}')
-    check_pass "[RATING-19] Prometheus Exporter Telemetry" "charging_revenue_total exposed on :9100 (${REV_VAL} LAB)"
+    check_pass "[RATING-20] Prometheus Exporter Telemetry" "charging_revenue_total exposed on :9100 (${REV_VAL} LAB)"
 else
-    check_fail "[RATING-19] Prometheus Exporter Telemetry" "charging_revenue_total not found on :9100"
+    check_fail "[RATING-20] Prometheus Exporter Telemetry" "charging_revenue_total not found on :9100"
 fi
 
 PROM_QUERY=$(curl -s "http://172.19.0.2:30090/api/v1/query?query=charging_revenue_total" | jq -r '.data.result[0].value[1]' 2>/dev/null || echo "")
 if [[ -n "$PROM_QUERY" && "$PROM_QUERY" != "null" ]]; then
-    check_pass "[RATING-20] Prometheus Target Scrape" "charging_revenue_total scraped by Prometheus (${PROM_QUERY} LAB)"
+    check_pass "[RATING-21] Prometheus Target Scrape" "charging_revenue_total scraped by Prometheus (${PROM_QUERY} LAB)"
 else
-    check_fail "[RATING-20] Prometheus Target Scrape" "Prometheus query for charging_revenue_total failed"
+    check_fail "[RATING-21] Prometheus Target Scrape" "Prometheus query for charging_revenue_total failed"
 fi
 
 PANEL_COUNT=$(curl -s -u admin:admin http://172.19.0.2:30300/api/dashboards/uid/5g-ims-telecom-overview | jq '.dashboard.panels | length' 2>/dev/null || echo "0")
 if [[ "$PANEL_COUNT" -ge 50 ]]; then
-    check_pass "[RATING-21] Grafana Dashboard Section J" "${PANEL_COUNT} visual panels loaded including Section J Revenue & Balance"
+    check_pass "[RATING-22] Grafana Dashboard Section J" "${PANEL_COUNT} visual panels loaded including Section J Revenue & Balance"
 else
-    check_fail "[RATING-21] Grafana Dashboard Section J" "expected >=50 panels, found $PANEL_COUNT"
+    check_fail "[RATING-22] Grafana Dashboard Section J" "expected >=50 panels, found $PANEL_COUNT"
 fi
 
 ALERT_RULES=$(curl -s http://172.19.0.2:30090/api/v1/rules | jq '.data.groups[] | select(.name=="telecom_rating_charging_alerts") | .rules | length' 2>/dev/null || echo "0")
 if [[ "$ALERT_RULES" -ge 5 ]]; then
-    check_pass "[RATING-22] Alertmanager Rules" "${ALERT_RULES} declarative charging alert rules active in Prometheus"
+    check_pass "[RATING-23] Alertmanager Rules" "${ALERT_RULES} declarative charging alert rules active in Prometheus"
 else
-    check_fail "[RATING-22] Alertmanager Rules" "expected >=5 charging alert rules, found $ALERT_RULES"
+    check_fail "[RATING-23] Alertmanager Rules" "expected >=5 charging alert rules, found $ALERT_RULES"
 fi
 
 echo -e "\n${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"

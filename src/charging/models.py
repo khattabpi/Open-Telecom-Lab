@@ -20,6 +20,7 @@ class Account:
     balance_consumed: float = 0.0
     currency: str = "LAB"
     status: str = "ACTIVE"
+    serving_plmn: Optional[str] = None
     created_at: str = field(default_factory=lambda: datetime.datetime.utcnow().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.datetime.utcnow().isoformat())
 

@@ -13,41 +13,65 @@ class RatingEngine:
     def __init__(self, db: Optional[Database] = None):
         self.db = db or Database()
 
-    def resolve_account(self, event: UsageEvent) -> Optional[Account]:
-        """Resolves charging account by IMSI, SIP URI, or MSISDN."""
+    def lookup_account_by_identifier(self, identifier: Optional[str]) -> Optional[Account]:
+        """Resolves charging account by IMSI, SIP URI, MSISDN, or Account ID."""
+        if not identifier:
+            return None
         with self.db.get_connection() as con:
             cur = con.cursor()
-            # 1. Match by SIP URI
-            if event.caller_uri:
-                cur.execute("SELECT * FROM charging_accounts WHERE sip_uri = ?;", (event.caller_uri,))
-                row = cur.fetchone()
-                if row:
-                    return Account(**dict(row))
-            # 2. Match by Caller ID (IMSI or MSISDN)
-            if event.caller_id:
-                cur.execute("SELECT * FROM charging_accounts WHERE imsi = ? OR msisdn = ? OR id = ?;", 
-                            (event.caller_id, event.caller_id, event.caller_id))
-                row = cur.fetchone()
-                if row:
-                    return Account(**dict(row))
+            cur.execute("""
+            SELECT * FROM charging_accounts 
+            WHERE sip_uri = ? OR imsi = ? OR msisdn = ? OR id = ?;
+            """, (identifier, identifier, identifier, identifier))
+            row = cur.fetchone()
+            if row:
+                return Account(**dict(row))
+        return None
+
+    def resolve_account(self, event: UsageEvent) -> Optional[Account]:
+        """Resolves charging account for the event's caller."""
+        if event.caller_uri:
+            acc = self.lookup_account_by_identifier(event.caller_uri)
+            if acc:
+                return acc
+        if event.caller_id:
+            acc = self.lookup_account_by_identifier(event.caller_id)
+            if acc:
+                return acc
         return None
 
     def classify_destination(self, event: UsageEvent, account: Account) -> str:
-        """Determines if the session is domestic or roaming."""
-        if event.service_type == "voice":
-            callee = (event.callee_uri or event.callee_id or "").lower()
-            # If callee is UE3 (roaming in Bosnia 218/90) or destination is 218/90
-            if "ue3" in callee or event.destination_plmn == "218/90":
-                return "roaming_vplmn"
-            # If caller is roaming in VPLMN 218/90
-            if event.origin_plmn == "218/90" or "218/90" in account.plmn:
-                return "roaming_vplmn"
-            return "domestic"
+        """
+        Determines if the session is domestic or roaming based on:
+        1. Caller's serving PLMN vs Home PLMN (Originating Roaming)
+        2. Callee's serving PLMN vs Home PLMN (Terminating Roaming)
+        3. Event origin/destination PLMN indicators
+        """
+        # 1. Check if caller is roaming (Serving PLMN != Home PLMN)
+        caller_serving_plmn = event.origin_plmn or account.serving_plmn
+        if caller_serving_plmn and caller_serving_plmn != account.plmn:
+            return "roaming_vplmn"
 
-        elif event.service_type == "data":
-            if event.origin_plmn == "218/90" or "roaming" in (event.origin_plmn or "").lower():
+        # 2. Check Voice Destination
+        if event.service_type == "voice":
+            callee_id = event.callee_uri or event.callee_id
+            if callee_id:
+                callee_acc = self.lookup_account_by_identifier(callee_id)
+                if callee_acc:
+                    callee_serving_plmn = event.destination_plmn or callee_acc.serving_plmn
+                    if callee_serving_plmn and callee_serving_plmn != callee_acc.plmn:
+                        return "roaming_vplmn"
+                    # If callee is in an external network outside home PLMN group
+                    if callee_acc.plmn != account.plmn and not (account.plmn.startswith("602/") and callee_acc.plmn.startswith("602/")):
+                        return "roaming_vplmn"
+
+            if event.destination_plmn and event.destination_plmn != account.plmn and not (account.plmn.startswith("602/") and event.destination_plmn.startswith("602/")):
                 return "roaming_vplmn"
-            return "domestic"
+
+        # 3. Check Data Destination
+        elif event.service_type == "data":
+            if event.origin_plmn and event.origin_plmn != account.plmn:
+                return "roaming_vplmn"
 
         return "domestic"
 

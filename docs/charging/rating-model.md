@@ -48,22 +48,39 @@ $$\text{Data Cost} = \left\lceil \frac{\max(\text{Total Bytes}, \text{Min Bytes}
 
 ## 4. Destination Classification Logic
 
+The rating engine determines `destination_type` (`domestic` vs `roaming_vplmn`) by comparing the subscriber's Home PLMN (`account.plmn`) against their active Serving / Visited PLMN (`account.serving_plmn` or `event.origin_plmn`):
+
+$$\text{Roaming Originating Call: } \text{account.serving\_plmn} \neq \text{account.plmn} \implies \text{destination\_type} = \text{roaming\_vplmn}$$
+
+$$\text{Roaming Terminating Call: } \text{callee\_account.serving\_plmn} \neq \text{callee\_account.plmn} \implies \text{destination\_type} = \text{roaming\_vplmn}$$
+
 ```mermaid
 flowchart TD
     START([Incoming Usage Event]) --> SVC{Service Type?}
     
-    SVC -->|Voice| CALLEE{Callee Destination?}
-    CALLEE -->|Callee is UE3 / VPLMN 218/90| ROAM[Destination: roaming_vplmn]
-    CALLEE -->|Caller is roaming in VPLMN 218/90| ROAM
-    CALLEE -->|UE1 <-> UE2 / PLMN 602/03 & 602/04| DOM[Destination: domestic]
+    SVC -->|Voice| ORIG_CHECK{Caller Serving PLMN != Home PLMN?}
+    ORIG_CHECK -->|Yes e.g. VPLMN 218/90| ROAM[Destination: roaming_vplmn]
+    ORIG_CHECK -->|No / Domestic| CALLEE{Callee Serving PLMN != Home PLMN?}
+    CALLEE -->|Yes e.g. UE3 in VPLMN 218/90| ROAM
+    CALLEE -->|No e.g. UE1 <-> UE2 / PLMN 602/03 & 602/04| DOM[Destination: domestic]
 
-    SVC -->|Data| ORIG{Origin PLMN?}
-    ORIG -->|Serving PLMN: 218/90| ROAM
-    ORIG -->|Home PLMN: 602/03 or 602/04| DOM
+    SVC -->|Data| DATA_ORIG{Serving PLMN != Home PLMN?}
+    DATA_ORIG -->|Yes e.g. VPLMN 218/90| ROAM
+    DATA_ORIG -->|No e.g. HPLMN 602/03 or 602/04| DOM
 
     ROAM --> TARIFF[Select Tariff for Rate Plan + Service + Destination]
     DOM --> TARIFF
 ```
+
+### 4.1 Roaming Voice Classification Example (UE3)
+- **Subscriber:** UE3 (`acc-ue3`)
+- **Home PLMN (`account.plmn`):** `602/03` (Egypt)
+- **Serving PLMN (`account.serving_plmn`):** `218/90` (Bosnia Local Breakout)
+- **Rate Plan:** `premium-roaming`
+- **Destination Type:** `roaming_vplmn`
+- **Selected Tariff:** `tariff-premium-roaming-voice` (Setup: `0.10 LAB`, Unit Rate: `0.04 LAB/s`)
+- **10-Second Call Rating Calculation:**
+  $$\text{Total Charge} = 0.10\text{ LAB (Setup)} + (10\text{ s} \times 0.04\text{ LAB/s}) = 0.10 + 0.40 = \mathbf{0.5000\text{ LAB}}$$
 
 ---
 
@@ -72,7 +89,7 @@ flowchart TD
 Every rated event produces a human-readable, auditable mathematical explanation stored in `rated_usage.rating_explanation`:
 
 ```text
-[Voice Rating] Plan: standard-prepaid | Tariff: tariff-roaming-voice (roaming_vplmn) | 
-Duration: 2.0s -> Billable: 2s | 
-Setup: 0.15 LAB + Usage: 0.1600 LAB (@ 0.08/s) = Total: 0.3100 LAB
+[Voice Rating] Plan: premium-roaming | Tariff: tariff-premium-roaming-voice (roaming_vplmn) | 
+Duration: 10.0s -> Billable: 10s | 
+Setup: 0.10 LAB + Usage: 0.4000 LAB (@ 0.04/s) = Total: 0.5000 LAB
 ```

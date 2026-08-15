@@ -24,6 +24,7 @@ erDiagram
         TEXT msisdn
         TEXT sip_uri UK
         TEXT plmn
+        TEXT serving_plmn
         TEXT rate_plan FK
         REAL balance_available
         REAL balance_reserved
@@ -113,7 +114,8 @@ erDiagram
 | `imsi` | `TEXT` | `UNIQUE NOT NULL` | Subscriber IMSI / SUPI |
 | `sip_uri` | `TEXT` | `UNIQUE` | Registered IMS SIP URI (`sip:ue1@ims.lab`) |
 | `plmn` | `TEXT` | `NOT NULL` | Home PLMN (`602/03`, `602/04`) |
-| `rate_plan` | `TEXT` | `NOT NULL` | Assigned rate plan ID (`standard-prepaid`) |
+| `serving_plmn` | `TEXT` | `NULLABLE` | Active Serving / Visited PLMN (`218/90` for roaming) |
+| `rate_plan` | `TEXT` | `NOT NULL` | Assigned rate plan ID (`standard-prepaid`, `premium-roaming`) |
 | `balance_available` | `REAL` | `CHECK(>= 0)` | Available liquid credit balance |
 | `balance_reserved` | `REAL` | `CHECK(>= 0)` | Credit locked in active reservations |
 | `balance_consumed` | `REAL` | `CHECK(>= 0)` | Cumulative historical spend |

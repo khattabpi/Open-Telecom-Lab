@@ -37,6 +37,7 @@ class Database:
                 msisdn TEXT,
                 sip_uri TEXT UNIQUE,
                 plmn TEXT NOT NULL,
+                serving_plmn TEXT,
                 rate_plan TEXT NOT NULL,
                 balance_available REAL NOT NULL DEFAULT 0.0 CHECK (balance_available >= 0),
                 balance_reserved REAL NOT NULL DEFAULT 0.0 CHECK (balance_reserved >= 0),
@@ -47,6 +48,12 @@ class Database:
                 updated_at TEXT NOT NULL
             );
             """)
+
+            # Schema migration for existing databases
+            cur.execute("PRAGMA table_info(charging_accounts);")
+            cols = [row[1] for row in cur.fetchall()]
+            if "serving_plmn" not in cols:
+                cur.execute("ALTER TABLE charging_accounts ADD COLUMN serving_plmn TEXT;")
 
             # 2. Rate Plans Table
             cur.execute("""
@@ -189,15 +196,16 @@ class Database:
                 for acc in acc_data.get("accounts", []):
                     cur.execute("SELECT id, balance_available FROM charging_accounts WHERE id = ?;", (acc["id"],))
                     existing = cur.fetchone()
+                    serving_p = acc.get("serving_plmn")
                     if not existing:
                         init_bal = float(acc.get("initial_balance", 0.0))
                         cur.execute("""
                         INSERT INTO charging_accounts 
-                        (id, name, imsi, msisdn, sip_uri, plmn, rate_plan, balance_available, balance_reserved, balance_consumed, currency, status, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, datetime('now'), datetime('now'));
+                        (id, name, imsi, msisdn, sip_uri, plmn, serving_plmn, rate_plan, balance_available, balance_reserved, balance_consumed, currency, status, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, datetime('now'), datetime('now'));
                         """, (
                             acc["id"], acc["name"], acc["imsi"], acc.get("msisdn", ""),
-                            acc.get("sip_uri", ""), acc["plmn"], acc["rate_plan"],
+                            acc.get("sip_uri", ""), acc["plmn"], serving_p, acc["rate_plan"],
                             init_bal, acc.get("currency", "LAB"), acc.get("status", "ACTIVE")
                         ))
                         # Record Initial Top-up in Transaction Ledger
@@ -209,4 +217,11 @@ class Database:
                             (id, account_id, transaction_type, amount, balance_before, balance_after, reference_type, reference_id, description, created_at)
                             VALUES (?, ?, 'TOPUP', ?, 0.0, ?, 'manual', 'initial_seed', 'Initial subscriber account provision balance', datetime('now'));
                             """, (tx_id, acc["id"], init_bal, init_bal))
+                    else:
+                        # Update serving_plmn and rate_plan if changed in config
+                        cur.execute("""
+                        UPDATE charging_accounts 
+                        SET serving_plmn = ?, rate_plan = ?, name = ?, updated_at = datetime('now')
+                        WHERE id = ?;
+                        """, (serving_p, acc["rate_plan"], acc["name"], acc["id"]))
             con.commit()
