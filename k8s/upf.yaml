@@ -60,6 +60,13 @@ spec:
               iptables -t nat -A POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE || true
               iptables -t nat -A POSTROUTING -s 10.46.0.0/16 ! -o ogstun -j MASQUERADE || true
 
+              # Phase 4: QoS Traffic Control & DiffServ Priority Queueing on ogstun
+              tc qdisc replace dev ogstun root handle 1: prio bands 3 priomap 1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1 || true
+              tc filter add dev ogstun parent 1: protocol ip prio 1 u32 match ip dport 5060 0xffff flowid 1:1 || true
+              tc filter add dev ogstun parent 1: protocol ip prio 1 u32 match ip sport 5060 0xffff flowid 1:1 || true
+              tc filter add dev ogstun parent 1: protocol ip prio 1 u32 match ip tos 0xb8 0xff flowid 1:1 || true
+              tc filter add dev ogstun parent 1: protocol ip prio 1 u32 match ip tos 0xa0 0xff flowid 1:1 || true
+
               echo "=== PFCP Server listening on all interfaces ==="
               exec open5gs-upfd -c /etc/open5gs/upf.yaml
           volumeMounts:

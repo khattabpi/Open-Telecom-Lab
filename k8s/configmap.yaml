@@ -290,7 +290,7 @@ data:
 
   pcf.yaml: |
     logger:
-      level: info
+      level: debug
     db_uri: mongodb://mongodb:27017/open5gs
     pcf:
       sbi:
@@ -304,7 +304,7 @@ data:
 
   bsf.yaml: |
     logger:
-      level: info
+      level: debug
     db_uri: mongodb://mongodb:27017/open5gs
     bsf:
       # The PCF discovers the BSF (nbsf-management) during SM policy setup to
