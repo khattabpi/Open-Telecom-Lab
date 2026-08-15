@@ -320,4 +320,3 @@ sudo ip netns exec <ue-netns> tcpdump -i uesimtun0 -n -s 0 -w sip.pcap
 ## 📄 License
 
 This project is licensed under the MIT License. See `LICENSE` for details.
-
