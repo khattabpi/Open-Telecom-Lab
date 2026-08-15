@@ -20,6 +20,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 UE1_CONFIG="${REPO_ROOT}/configs/ueransim/open5gs-ue.yaml"
 UE2_CONFIG="${REPO_ROOT}/configs/ueransim/open5gs-ue2.yaml"
+UE3_CONFIG="${REPO_ROOT}/configs/ueransim/open5gs-ue3.yaml"
 UE_BIN="${REPO_ROOT}/UERANSIM/build/nr-ue"
 
 if [ "${EUID}" -ne 0 ]; then
@@ -38,7 +39,7 @@ fi
 
 cleanup_namespaces_for_imsi() {
     local imsi="$1"
-    for ns in $(ip netns list 2>/dev/null | awk '{print $1}' | grep "${imsi}" || true); do
+    for ns in $(ip netns list 2>/dev/null | awk -v imsi="${imsi}" '$1 ~ imsi {print $1}'); do
         ip netns delete "${ns}" 2>/dev/null || true
     done
 }
@@ -60,12 +61,19 @@ stop_ue() {
             cleanup_namespaces_for_imsi "602040000000002"
             cleanup_namespaces_for_imsi "001010000000002"
             ;;
+        3|ue3)
+            echo "[+] Stopping UE3 (IMSI 602030000000003 - Roaming VPLMN 218/90)..."
+            pkill -9 -f 'nr-ue.*open5gs-ue3\.yaml' 2>/dev/null || true
+            sleep 1
+            cleanup_namespaces_for_imsi "602030000000003"
+            ;;
         all|"")
             echo "[+] Stopping all nr-ue instances..."
             pkill -9 -f 'nr-ue' 2>/dev/null || true
             sleep 1
             cleanup_namespaces_for_imsi "602030000000001"
             cleanup_namespaces_for_imsi "602040000000002"
+            cleanup_namespaces_for_imsi "602030000000003"
             cleanup_namespaces_for_imsi "001010000000001"
             cleanup_namespaces_for_imsi "001010000000002"
             ;;
@@ -108,6 +116,8 @@ setup_netns_dns() {
         "ueransim-602030000000001-ims-psi2"
         "ueransim-602040000000002-internet-psi1"
         "ueransim-602040000000002-ims-psi2"
+        "ueransim-602030000000003-internet-psi1"
+        "ueransim-602030000000003-ims-psi2"
     )
     for ns in "${known_ns[@]}" $(ip netns list 2>/dev/null | awk '{print $1}'); do
         mkdir -p "/etc/netns/${ns}"
@@ -139,12 +149,19 @@ case "${TARGET}" in
         start_single_ue "UE2 (602040000000002)" "${UE2_CONFIG}" "/tmp/ueransim-ue2.log" "602040000000002"
         setup_netns_dns
         ;;
+    3|ue3)
+        stop_ue 3
+        start_single_ue "UE3 (602030000000003 - Roaming 218/90)" "${UE3_CONFIG}" "/tmp/ueransim-ue3.log" "602030000000003"
+        setup_netns_dns
+        ;;
     all)
         stop_ue all
         start_single_ue "UE1 (602030000000001)" "${UE1_CONFIG}" "/tmp/ueransim-ue1.log" "602030000000001"
         cp -f "/tmp/ueransim-ue1.log" "/tmp/ueransim-ue.log" 2>/dev/null || true
         sleep 1
         start_single_ue "UE2 (602040000000002)" "${UE2_CONFIG}" "/tmp/ueransim-ue2.log" "602040000000002"
+        sleep 1
+        start_single_ue "UE3 (602030000000003 - Roaming 218/90)" "${UE3_CONFIG}" "/tmp/ueransim-ue3.log" "602030000000003"
         setup_netns_dns
         ;;
     *)
@@ -154,7 +171,7 @@ case "${TARGET}" in
             setup_netns_dns
         else
             echo "[-] Error: Unknown target or configuration file '${TARGET}'" >&2
-            echo "Usage: sudo bash scripts/run-ue.sh [1|2|all|stop|<config-file>]" >&2
+            echo "Usage: sudo bash scripts/run-ue.sh [1|2|3|all|stop|<config-file>]" >&2
             exit 1
         fi
         ;;

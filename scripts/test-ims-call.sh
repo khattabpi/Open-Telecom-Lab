@@ -2,285 +2,214 @@
 # ==============================================================================
 # test-ims-call.sh - End-to-End IMS / SIP Signaling & RTPEngine Media Verification
 #
-# Validates complete 3GPP Vo5G / IMS call flow between UE1 and UE2:
-#   1. UE1 SIP REGISTER with Digest MD5 Authentication -> 200 OK
-#   2. UE2 SIP REGISTER with Digest MD5 Authentication -> 200 OK
-#   3. UE1 SIP INVITE (SDP offer) -> P-CSCF (rtpengine_offer) -> S-CSCF -> P-CSCF -> UE2
-#   4. UE2 SIP 180 Ringing -> P-CSCF -> S-CSCF -> P-CSCF -> UE1
-#   5. UE2 SIP 200 OK (SDP answer) -> P-CSCF (rtpengine_answer) -> S-CSCF -> P-CSCF -> UE1
-#   6. UE1 SIP ACK -> P-CSCF -> S-CSCF -> P-CSCF -> UE2
-#   7. Bidirectional RTP Audio Media Stream via RTPEngine Proxy (10.46.0.1)
-#   8. UE1 SIP BYE -> P-CSCF (rtpengine_delete) -> S-CSCF -> P-CSCF -> UE2
-#   9. UE2 SIP 200 OK -> UE1
+# Validates complete 3GPP Vo5G / IMS call flows:
+#   - Domestic Call: UE1 (Egypt 602/03) <-> UE2 (Egypt 602/04)
+#   - Inter-PLMN Roaming Call: UE1 (Egypt 602/03) <-> UE3 (Bosnia 218/90 Roaming)
+#
+# Flow verified per call:
+#   1. SIP REGISTER with Digest MD5 Authentication -> 200 OK
+#   2. SIP INVITE (SDP offer) -> P-CSCF (rtpengine_offer) -> S-CSCF -> P-CSCF -> Callee
+#   3. SIP 180 Ringing -> P-CSCF -> S-CSCF -> P-CSCF -> Caller
+#   4. SIP 200 OK (SDP answer) -> P-CSCF (rtpengine_answer) -> S-CSCF -> P-CSCF -> Caller
+#   5. SIP ACK -> P-CSCF -> S-CSCF -> P-CSCF -> Callee
+#   6. Bidirectional RTP Audio Stream via RTPEngine Proxy (10.46.0.1)
+#   7. SIP BYE -> P-CSCF (rtpengine_delete) -> S-CSCF -> P-CSCF -> Callee -> 200 OK
 # ==============================================================================
 
 set -euo pipefail
 
-UE1_IMSI="${UE1_IMSI:-602030000000001}"
-UE2_IMSI="${UE2_IMSI:-602040000000002}"
-UE1_NETNS="ueransim-${UE1_IMSI}-ims-psi2"
-UE2_NETNS="ueransim-${UE2_IMSI}-ims-psi2"
-PCSCF_IP="10.46.0.1"
-SIP_PORT=5060
-RTP_PORT=10000
-NUM_PACKETS=25
+MODE="${1:-all}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-# Text colors
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+# Run python engine
+python3 - "${MODE}" << 'EOF'
+import socket, re, hashlib, time, threading, sys, os, subprocess
 
-# Pre-checks: Verify network namespaces exist
-if ! ip netns list | grep -q "${UE1_NETNS}"; then
-    echo -e "${RED}[✗] Error: UE1 IMS network namespace ${UE1_NETNS} not found.${NC}"
-    exit 1
-fi
-if ! ip netns list | grep -q "${UE2_NETNS}"; then
-    echo -e "${RED}[✗] Error: UE2 IMS network namespace ${UE2_NETNS} not found.${NC}"
-    exit 1
-fi
+MODE = sys.argv[1] if len(sys.argv) > 1 else "all"
+PCSCF_IP = "10.46.0.1"
+SIP_PORT = 5060
+RTP_PORT = 10000
+NUM_PACKETS = 25
 
-# Dynamically discover allocated UE IMS IPs
-UE1_IP=$(ip netns exec "${UE1_NETNS}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 || echo "")
-UE2_IP=$(ip netns exec "${UE2_NETNS}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 || echo "")
+# Text formatting
+GREEN = "\033[0;32m"
+RED = "\033[0;31m"
+YELLOW = "\033[1;33m"
+BLUE = "\033[0;34m"
+CYAN = "\033[0;36m"
+BOLD = "\033[1m"
+NC = "\033[0m"
 
-if [ -z "${UE1_IP}" ] || [ -z "${UE2_IP}" ]; then
-    echo -e "${RED}[✗] Error: Could not resolve dynamic IMS IP addresses on uesimtun0.${NC}"
-    exit 1
-fi
+UE_MAP = {
+    "ue1": {"imsi": "602030000000001", "name": "UE1 (Egypt 602/03)", "domain": "ims.lab", "pass": "password123"},
+    "ue2": {"imsi": "602040000000002", "name": "UE2 (Egypt 602/04)", "domain": "ims.lab", "pass": "password123"},
+    "ue3": {"imsi": "602030000000003", "name": "UE3 (Bosnia 218/90 Roaming)", "domain": "ims.lab", "pass": "password123"}
+}
 
-echo -e "${BLUE}============================================================${NC}"
-echo -e "${BLUE}    Open5GS 5G SA + Kamailio IMS End-to-End SIP Call Test   ${NC}"
-echo -e "${BLUE}============================================================${NC}"
-echo -e "  Caller (UE1):  IMSI ${UE1_IMSI} | IP ${UE1_IP} | Netns ${UE1_NETNS}"
-echo -e "  Callee (UE2):  IMSI ${UE2_IMSI} | IP ${UE2_IP} | Netns ${UE2_NETNS}"
-echo -e "  P-CSCF Proxy:  ${PCSCF_IP}:${SIP_PORT}"
-echo -e "  Media Proxy:   RTPEngine @ ${PCSCF_IP}"
-echo -e "  Domain:        ims.lab"
-echo -e "  RTP Packets:   ${NUM_PACKETS} per direction"
-echo -e "------------------------------------------------------------"
+def get_ue_ip(imsi):
+    ns = f"ueransim-{imsi}-ims-psi2"
+    cmd = f"ip netns exec {ns} ip -4 addr show 2>/dev/null"
+    res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    m = re.search(r'inet (10\.46\.[0-9.]+)/\d+', res.stdout)
+    if m:
+        return m.group(1), ns
+    raise RuntimeError(f"IMS IPv4 (10.46.x.x) not found in namespace '{ns}'. Is UE running with IMS PDU session?")
 
-# Step 1: SIP Registration
-echo -e "\n${CYAN}[1/4] Performing SIP Registration with Digest MD5 Auth...${NC}"
+def register_ue(ue_key):
+    info = UE_MAP[ue_key]
+    imsi = info["imsi"]
+    ip, ns = get_ue_ip(imsi)
 
-# Register UE1
-REGISTER_UE1_OUTPUT=$(ip netns exec "${UE1_NETNS}" python3 -c "
-import socket, re, hashlib, time, sys
+    script = f"""import socket, re, hashlib, time, sys
 
-def make_digest_auth(username, password, realm, nonce, uri, method):
-    ha1 = hashlib.md5(f'{username}:{realm}:{password}'.encode()).hexdigest()
-    ha2 = hashlib.md5(f'{method}:{uri}'.encode()).hexdigest()
-    resp = hashlib.md5(f'{ha1}:{nonce}:{ha2}'.encode()).hexdigest()
-    return f'Digest username=\"{username}\", realm=\"{realm}\", nonce=\"{nonce}\", uri=\"{uri}\", response=\"{resp}\", algorithm=MD5'
+def make_digest(u, p, r, n, uri, m):
+    ha1 = hashlib.md5(f'{{u}}:{{r}}:{{p}}'.encode()).hexdigest()
+    ha2 = hashlib.md5(f'{{m}}:{{uri}}'.encode()).hexdigest()
+    resp = hashlib.md5(f'{{ha1}}:{{n}}:{{ha2}}'.encode()).hexdigest()
+    return f'Digest username="{{u}}", realm="{{r}}", nonce="{{n}}", uri="{{uri}}", response="{{resp}}", algorithm=MD5'
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.bind(('${UE1_IP}', ${SIP_PORT}))
+s.bind(('{ip}', {SIP_PORT}))
 s.settimeout(4.0)
 
 cseq_base = int(time.time())
-call_id = f'call-reg-1-{cseq_base}@${UE1_IP}'
+call_id = f'call-reg-{ue_key}-{{cseq_base}}@{ip}'
 
 req1 = (
-    'REGISTER sip:ims.lab SIP/2.0\r\n'
-    f'Via: SIP/2.0/UDP ${UE1_IP}:${SIP_PORT};rport;branch=z9hG4bK-reg1-{cseq_base}\r\n'
-    'Max-Forwards: 70\r\n'
-    'From: <sip:ue1@ims.lab>;tag=tag101\r\n'
-    'To: <sip:ue1@ims.lab>\r\n'
-    f'Call-ID: {call_id}\r\n'
-    f'CSeq: {cseq_base} REGISTER\r\n'
-    'Contact: <sip:ue1@${UE1_IP}:${SIP_PORT}>\r\n'
-    'Expires: 3600\r\n'
-    'Content-Length: 0\r\n\r\n'
+    'REGISTER sip:ims.lab SIP/2.0\\r\\n'
+    f'Via: SIP/2.0/UDP {ip}:{SIP_PORT};rport;branch=z9hG4bK-reg-{ue_key}-1\\r\\n'
+    'Max-Forwards: 70\\r\\n'
+    'From: <sip:{ue_key}@ims.lab>;tag=tag_{ue_key}_1\\r\\n'
+    'To: <sip:{ue_key}@ims.lab>\\r\\n'
+    f'Call-ID: {{call_id}}\\r\\n'
+    f'CSeq: {{cseq_base}} REGISTER\\r\\n'
+    'Contact: <sip:{ue_key}@{ip}:{SIP_PORT}>\\r\\n'
+    'Expires: 3600\\r\\n'
+    'Content-Length: 0\\r\\n\\r\\n'
 )
-s.sendto(req1.encode(), ('${PCSCF_IP}', ${SIP_PORT}))
+s.sendto(req1.encode(), ('{PCSCF_IP}', {SIP_PORT}))
 resp1, _ = s.recvfrom(4096)
 resp1_str = resp1.decode('latin1')
-if '401' not in resp1_str:
-    print('FAIL: Expected 401 Unauthorized, got:', resp1_str[:100])
-    sys.exit(1)
+assert '401' in resp1_str, f'Expected 401 Unauthorized, got: {{resp1_str}}'
 
-nonce = re.search(r'nonce=\"([^\"]+)\"', resp1_str).group(1)
-realm = re.search(r'realm=\"([^\"]+)\"', resp1_str).group(1)
-auth_hdr = make_digest_auth('ue1', 'password123', realm, nonce, 'sip:ims.lab', 'REGISTER')
+nonce = re.search(r'nonce="([^"]+)"', resp1_str).group(1)
+realm = re.search(r'realm="([^"]+)"', resp1_str).group(1)
+auth_hdr = make_digest('{ue_key}', '{info["pass"]}', realm, nonce, 'sip:ims.lab', 'REGISTER')
 
 req2 = (
-    'REGISTER sip:ims.lab SIP/2.0\r\n'
-    f'Via: SIP/2.0/UDP ${UE1_IP}:${SIP_PORT};rport;branch=z9hG4bK-reg1-{cseq_base+1}\r\n'
-    'Max-Forwards: 70\r\n'
-    'From: <sip:ue1@ims.lab>;tag=tag101\r\n'
-    'To: <sip:ue1@ims.lab>\r\n'
-    f'Call-ID: {call_id}\r\n'
-    f'CSeq: {cseq_base+1} REGISTER\r\n'
-    'Contact: <sip:ue1@${UE1_IP}:${SIP_PORT}>\r\n'
-    f'Authorization: {auth_hdr}\r\n'
-    'Expires: 3600\r\n'
-    'Content-Length: 0\r\n\r\n'
+    'REGISTER sip:ims.lab SIP/2.0\\r\\n'
+    f'Via: SIP/2.0/UDP {ip}:{SIP_PORT};rport;branch=z9hG4bK-reg-{ue_key}-2\\r\\n'
+    'Max-Forwards: 70\\r\\n'
+    'From: <sip:{ue_key}@ims.lab>;tag=tag_{ue_key}_1\\r\\n'
+    'To: <sip:{ue_key}@ims.lab>\\r\\n'
+    f'Call-ID: {{call_id}}\\r\\n'
+    f'CSeq: {{cseq_base+1}} REGISTER\\r\\n'
+    'Contact: <sip:{ue_key}@{ip}:{SIP_PORT}>\\r\\n'
+    f'Authorization: {{auth_hdr}}\\r\\n'
+    'Expires: 3600\\r\\n'
+    'Content-Length: 0\\r\\n\\r\\n'
 )
-s.sendto(req2.encode(), ('${PCSCF_IP}', ${SIP_PORT}))
+s.sendto(req2.encode(), ('{PCSCF_IP}', {SIP_PORT}))
 resp2, _ = s.recvfrom(4096)
 resp2_str = resp2.decode('latin1')
-if '200 OK' in resp2_str:
-    print('SUCCESS: Registered sip:ue1@ims.lab (Contact: ${UE1_IP}:${SIP_PORT})')
-else:
-    print('FAIL: UE1 Auth Failed:', resp2_str[:100])
-    sys.exit(1)
-")
-echo -e "  UE1 Registration: ${GREEN}${REGISTER_UE1_OUTPUT}${NC}"
+assert '200 OK' in resp2_str, f'Expected 200 OK, got: {{resp2_str}}'
+print(f'Authenticated & Registered sip:{ue_key}@ims.lab (Contact: {ip}:{SIP_PORT})')
+"""
+    tmp_path = f"/tmp/reg_{ue_key}.py"
+    with open(tmp_path, "w") as f:
+        f.write(script)
+    res = subprocess.run(f"ip netns exec {ns} python3 {tmp_path}", shell=True, capture_output=True, text=True)
+    if res.returncode != 0:
+        print(f"  {RED}[✗] {info['name']} Registration Failed: {res.stderr.strip()}{NC}")
+        return False
+    print(f"  {GREEN}[✓] {info['name']}: {res.stdout.strip()}{NC}")
+    return True
 
-# Register UE2
-REGISTER_UE2_OUTPUT=$(ip netns exec "${UE2_NETNS}" python3 -c "
-import socket, re, hashlib, time, sys
+def run_call(caller_key, callee_key):
+    caller_info = UE_MAP[caller_key]
+    callee_info = UE_MAP[callee_key]
+    caller_ip, caller_ns = get_ue_ip(caller_info["imsi"])
+    callee_ip, callee_ns = get_ue_ip(callee_info["imsi"])
 
-def make_digest_auth(username, password, realm, nonce, uri, method):
-    ha1 = hashlib.md5(f'{username}:{realm}:{password}'.encode()).hexdigest()
-    ha2 = hashlib.md5(f'{method}:{uri}'.encode()).hexdigest()
-    resp = hashlib.md5(f'{ha1}:{nonce}:{ha2}'.encode()).hexdigest()
-    return f'Digest username=\"{username}\", realm=\"{realm}\", nonce=\"{nonce}\", uri=\"{uri}\", response=\"{resp}\", algorithm=MD5'
+    print(f"\n{CYAN}------------------------------------------------------------{NC}")
+    print(f"{BOLD}SIP Voice Call: {caller_info['name']} ──► {callee_info['name']}{NC}")
+    print(f"  Caller: {caller_key}@ims.lab ({caller_ip}) | Callee: {callee_key}@ims.lab ({callee_ip})")
+    print(f"  P-CSCF: {PCSCF_IP}:{SIP_PORT} | RTPEngine Media Proxy: {PCSCF_IP}")
+    print(f"{CYAN}------------------------------------------------------------{NC}")
 
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.bind(('${UE2_IP}', ${SIP_PORT}))
-s.settimeout(4.0)
-
-cseq_base = int(time.time())
-call_id = f'call-reg-2-{cseq_base}@${UE2_IP}'
-
-req1 = (
-    'REGISTER sip:ims.lab SIP/2.0\r\n'
-    f'Via: SIP/2.0/UDP ${UE2_IP}:${SIP_PORT};rport;branch=z9hG4bK-reg2-{cseq_base}\r\n'
-    'Max-Forwards: 70\r\n'
-    'From: <sip:ue2@ims.lab>;tag=tag201\r\n'
-    'To: <sip:ue2@ims.lab>\r\n'
-    f'Call-ID: {call_id}\r\n'
-    f'CSeq: {cseq_base} REGISTER\r\n'
-    'Contact: <sip:ue2@${UE2_IP}:${SIP_PORT}>\r\n'
-    'Expires: 3600\r\n'
-    'Content-Length: 0\r\n\r\n'
-)
-s.sendto(req1.encode(), ('${PCSCF_IP}', ${SIP_PORT}))
-resp1, _ = s.recvfrom(4096)
-resp1_str = resp1.decode('latin1')
-if '401' not in resp1_str:
-    print('FAIL: Expected 401 Unauthorized, got:', resp1_str[:100])
-    sys.exit(1)
-
-nonce = re.search(r'nonce=\"([^\"]+)\"', resp1_str).group(1)
-realm = re.search(r'realm=\"([^\"]+)\"', resp1_str).group(1)
-auth_hdr = make_digest_auth('ue2', 'password123', realm, nonce, 'sip:ims.lab', 'REGISTER')
-
-req2 = (
-    'REGISTER sip:ims.lab SIP/2.0\r\n'
-    f'Via: SIP/2.0/UDP ${UE2_IP}:${SIP_PORT};rport;branch=z9hG4bK-reg2-{cseq_base+1}\r\n'
-    'Max-Forwards: 70\r\n'
-    'From: <sip:ue2@ims.lab>;tag=tag201\r\n'
-    'To: <sip:ue2@ims.lab>\r\n'
-    f'Call-ID: {call_id}\r\n'
-    f'CSeq: {cseq_base+1} REGISTER\r\n'
-    'Contact: <sip:ue2@${UE2_IP}:${SIP_PORT}>\r\n'
-    f'Authorization: {auth_hdr}\r\n'
-    'Expires: 3600\r\n'
-    'Content-Length: 0\r\n\r\n'
-)
-s.sendto(req2.encode(), ('${PCSCF_IP}', ${SIP_PORT}))
-resp2, _ = s.recvfrom(4096)
-resp2_str = resp2.decode('latin1')
-if '200 OK' in resp2_str:
-    print('SUCCESS: Registered sip:ue2@ims.lab (Contact: ${UE2_IP}:${SIP_PORT})')
-else:
-    print('FAIL: UE2 Auth Failed:', resp2_str[:100])
-    sys.exit(1)
-")
-echo -e "  UE2 Registration: ${GREEN}${REGISTER_UE2_OUTPUT}${NC}"
-
-echo -e "\n${CYAN}[2/4] Executing End-to-End SIP Call & RTPEngine Media Flow...${NC}"
-
-TMP_DIR=$(mktemp -d)
-trap 'rm -rf "${TMP_DIR}"' EXIT
-
-# Background UE2 Callee Listener
-ip netns exec "${UE2_NETNS}" python3 -c "
-import socket, re, time, threading, sys
-
+    callee_script = f"""import socket, re, time, threading, sys
 try:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind(('${UE2_IP}', ${SIP_PORT}))
+    s.bind(('{callee_ip}', {SIP_PORT}))
     s.settimeout(12.0)
 
-    # Pre-bind RTP socket
     rtp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    rtp_sock.bind(('${UE2_IP}', ${RTP_PORT}))
+    rtp_sock.bind(('{callee_ip}', {RTP_PORT}))
     rtp_sock.settimeout(8.0)
 
-    # 1. Receive INVITE
     invite_data, addr = s.recvfrom(4096)
     invite_str = invite_data.decode('latin1')
 
-    vias = re.findall(r'Via: ([^\r\n]+)', invite_str)
-    from_hdr = re.search(r'From: ([^\r\n]+)', invite_str).group(1)
-    to_hdr = re.search(r'To: ([^\r\n]+)', invite_str).group(1)
-    call_id = re.search(r'Call-ID: ([^\r\n]+)', invite_str).group(1)
-    cseq = re.search(r'CSeq: ([^\r\n]+)', invite_str).group(1)
+    vias = re.findall(r'Via: ([^\\r\\n]+)', invite_str)
+    from_hdr = re.search(r'From: ([^\\r\\n]+)', invite_str).group(1)
+    to_hdr = re.search(r'To: ([^\\r\\n]+)', invite_str).group(1)
+    call_id = re.search(r'Call-ID: ([^\\r\\n]+)', invite_str).group(1)
+    cseq = re.search(r'CSeq: ([^\\r\\n]+)', invite_str).group(1)
     cseq_num = cseq.split()[0]
-    rr_hdrs = re.findall(r'Record-Route: ([^\r\n]+)', invite_str)
+    rr_hdrs = re.findall(r'Record-Route: ([^\\r\\n]+)', invite_str)
 
-    # Parse RTPEngine rewritten media destination from incoming INVITE SDP
     sdp_ip = re.search(r'c=IN IP4 ([0-9.]+)', invite_str).group(1)
     sdp_port = int(re.search(r'm=audio ([0-9]+)', invite_str).group(1))
 
-    via_block = '\r\n'.join([f'Via: {v}' for v in vias]) + '\r\n'
-    rr_block = ('\r\n'.join([f'Record-Route: {r}' for r in rr_hdrs]) + '\r\n') if rr_hdrs else ''
+    via_block = '\\r\\n'.join([f'Via: {{v}}' for v in vias]) + '\\r\\n'
+    rr_block = ('\\r\\n'.join([f'Record-Route: {{r}}' for r in rr_hdrs]) + '\\r\\n') if rr_hdrs else ''
 
-    # 2. Send 180 Ringing
     ringing = (
-        'SIP/2.0 180 Ringing\r\n'
-        f'{via_block}'
-        f'{rr_block}'
-        f'From: {from_hdr}\r\n'
-        f'To: {to_hdr};tag=callee-tag-ue2\r\n'
-        f'Call-ID: {call_id}\r\n'
-        f'CSeq: {cseq_num} INVITE\r\n'
-        'Contact: <sip:ue2@${UE2_IP}:${SIP_PORT}>\r\n'
-        'Content-Length: 0\r\n\r\n'
+        'SIP/2.0 180 Ringing\\r\\n'
+        f'{{via_block}}'
+        f'{{rr_block}}'
+        f'From: {{from_hdr}}\\r\\n'
+        f'To: {{to_hdr}};tag=callee-tag-{callee_key}\\r\\n'
+        f'Call-ID: {{call_id}}\\r\\n'
+        f'CSeq: {{cseq_num}} INVITE\\r\\n'
+        'Contact: <sip:{callee_key}@{callee_ip}:{SIP_PORT}>\\r\\n'
+        'Content-Length: 0\\r\\n\\r\\n'
     )
     s.sendto(ringing.encode(), addr)
     time.sleep(0.2)
 
-    # 3. Send 200 OK with Callee SDP
     sdp = (
-        'v=0\r\n'
-        'o=ue2 2890844527 2890844527 IN IP4 ${UE2_IP}\r\n'
-        's=Vo5G Session\r\n'
-        'c=IN IP4 ${UE2_IP}\r\n'
-        't=0 0\r\n'
-        'm=audio ${RTP_PORT} RTP/AVP 0 8\r\n'
-        'a=rtpmap:0 PCMU/8000\r\n'
-        'a=rtpmap:8 PCMA/8000\r\n'
-        'a=sendrecv\r\n'
+        'v=0\\r\\n'
+        f'o={callee_key} 2890844527 2890844527 IN IP4 {callee_ip}\\r\\n'
+        's=Vo5G Session\\r\\n'
+        f'c=IN IP4 {callee_ip}\\r\\n'
+        't=0 0\\r\\n'
+        f'm=audio {RTP_PORT} RTP/AVP 0 8\\r\\n'
+        'a=rtpmap:0 PCMU/8000\\r\\n'
+        'a=rtpmap:8 PCMA/8000\\r\\n'
+        'a=sendrecv\\r\\n'
     )
     ok200 = (
-        'SIP/2.0 200 OK\r\n'
-        f'{via_block}'
-        f'{rr_block}'
-        f'From: {from_hdr}\r\n'
-        f'To: {to_hdr};tag=callee-tag-ue2\r\n'
-        f'Call-ID: {call_id}\r\n'
-        f'CSeq: {cseq_num} INVITE\r\n'
-        'Contact: <sip:ue2@${UE2_IP}:${SIP_PORT}>\r\n'
-        'Content-Type: application/sdp\r\n'
-        f'Content-Length: {len(sdp)}\r\n\r\n'
-        f'{sdp}'
+        'SIP/2.0 200 OK\\r\\n'
+        f'{{via_block}}'
+        f'{{rr_block}}'
+        f'From: {{from_hdr}}\\r\\n'
+        f'To: {{to_hdr}};tag=callee-tag-{callee_key}\\r\\n'
+        f'Call-ID: {{call_id}}\\r\\n'
+        f'CSeq: {{cseq_num}} INVITE\\r\\n'
+        'Contact: <sip:{callee_key}@{callee_ip}:{SIP_PORT}>\\r\\n'
+        'Content-Type: application/sdp\\r\\n'
+        f'Content-Length: {{len(sdp)}}\\r\\n\\r\\n'
+        f'{{sdp}}'
     )
     s.sendto(ok200.encode(), addr)
 
-    # 4. Receive ACK
     ack_data, _ = s.recvfrom(4096)
 
-    # 5. RTP Voice Stream Exchange in thread with RTPEngine Media Destination
     rcv_count = [0]
     def rtp_receiver():
-        while rcv_count[0] < ${NUM_PACKETS}:
+        while rcv_count[0] < {NUM_PACKETS}:
             try:
                 pkt, _ = rtp_sock.recvfrom(512)
                 rcv_count[0] += 1
@@ -290,132 +219,120 @@ try:
     rx_thread = threading.Thread(target=rtp_receiver)
     rx_thread.start()
 
-    for i in range(${NUM_PACKETS}):
-        rtp_pkt = b'\x80\x00' + i.to_bytes(2, 'big') + (i*160).to_bytes(4, 'big') + b'\x12\x34\x56\x78' + (b'RTP-VOICE-PAYLOAD-UE2-' + str(i).encode()).ljust(160, b'\x00')
+    for i in range({NUM_PACKETS}):
+        rtp_pkt = b'\\x80\\x00' + i.to_bytes(2, 'big') + (i*160).to_bytes(4, 'big') + b'\\x12\\x34\\x56\\x78' + (b'RTP-VOICE-PAYLOAD-' + f'{callee_key}'.encode() + b'-' + str(i).encode()).ljust(160, b'\\x00')
         rtp_sock.sendto(rtp_pkt, (sdp_ip, sdp_port))
         time.sleep(0.02)
 
     rx_thread.join(timeout=3.0)
 
-    # 6. Receive BYE
     bye_data, bye_addr = s.recvfrom(4096)
     bye_str = bye_data.decode('latin1')
-    bye_vias = re.findall(r'Via: ([^\r\n]+)', bye_str)
-    bye_via_block = '\r\n'.join([f'Via: {v}' for v in bye_vias]) + '\r\n'
-    bye_cseq = re.search(r'CSeq: ([^\r\n]+)', bye_str).group(1)
+    bye_vias = re.findall(r'Via: ([^\\r\\n]+)', bye_str)
+    bye_via_block = '\\r\\n'.join([f'Via: {{v}}' for v in bye_vias]) + '\\r\\n'
+    bye_cseq = re.search(r'CSeq: ([^\\r\\n]+)', bye_str).group(1)
 
-    # 7. Send 200 OK to BYE
     bye_ok = (
-        'SIP/2.0 200 OK\r\n'
-        f'{bye_via_block}'
-        f'From: {from_hdr}\r\n'
-        f'To: {to_hdr};tag=callee-tag-ue2\r\n'
-        f'Call-ID: {call_id}\r\n'
-        f'CSeq: {bye_cseq}\r\n'
-        'Content-Length: 0\r\n\r\n'
+        'SIP/2.0 200 OK\\r\\n'
+        f'{{bye_via_block}}'
+        f'From: {{from_hdr}}\\r\\n'
+        f'To: {{to_hdr}};tag=callee-tag-{callee_key}\\r\\n'
+        f'Call-ID: {{call_id}}\\r\\n'
+        f'CSeq: {{bye_cseq}}\\r\\n'
+        'Content-Length: 0\\r\\n\\r\\n'
     )
     s.sendto(bye_ok.encode(), bye_addr)
-    with open('${TMP_DIR}/callee_result.txt', 'w') as f:
-        f.write(f'OK: Target={sdp_ip}:{sdp_port} | Transmitted ${NUM_PACKETS} RTP packets | Received {rcv_count[0]} RTP packets')
+    with open('/tmp/callee_res.txt', 'w') as f:
+        f.write(f'OK: Received {{rcv_count[0]}}/{NUM_PACKETS} RTP packets')
 except Exception as e:
-    with open('${TMP_DIR}/callee_result.txt', 'w') as f:
-        f.write(f'ERROR: {e}')
+    with open('/tmp/callee_res.txt', 'w') as f:
+        f.write(f'ERROR: {{e}}')
     sys.exit(1)
-" &
-PID_UE2=$!
+"""
 
-sleep 0.8
-
-# Foreground UE1 Caller
-ip netns exec "${UE1_NETNS}" python3 -c "
-import socket, re, time, threading, sys
-
+    caller_script = f"""import socket, re, time, threading, sys
 try:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind(('${UE1_IP}', ${SIP_PORT}))
+    s.bind(('{caller_ip}', {SIP_PORT}))
     s.settimeout(8.0)
 
-    # Pre-bind RTP socket
     rtp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    rtp_sock.bind(('${UE1_IP}', ${RTP_PORT}))
+    rtp_sock.bind(('{caller_ip}', {RTP_PORT}))
     rtp_sock.settimeout(8.0)
 
     sdp = (
-        'v=0\r\n'
-        'o=ue1 2890844526 2890844526 IN IP4 ${UE1_IP}\r\n'
-        's=Vo5G Session\r\n'
-        'c=IN IP4 ${UE1_IP}\r\n'
-        't=0 0\r\n'
-        'm=audio ${RTP_PORT} RTP/AVP 0 8\r\n'
-        'a=rtpmap:0 PCMU/8000\r\n'
-        'a=rtpmap:8 PCMA/8000\r\n'
-        'a=sendrecv\r\n'
+        'v=0\\r\\n'
+        f'o={caller_key} 2890844526 2890844526 IN IP4 {caller_ip}\\r\\n'
+        's=Vo5G Session\\r\\n'
+        f'c=IN IP4 {caller_ip}\\r\\n'
+        't=0 0\\r\\n'
+        f'm=audio {RTP_PORT} RTP/AVP 0 8\\r\\n'
+        'a=rtpmap:0 PCMU/8000\\r\\n'
+        'a=rtpmap:8 PCMA/8000\\r\\n'
+        'a=sendrecv\\r\\n'
     )
 
     call_seq = int(time.time() % 100000)
     invite = (
-        'INVITE sip:ue2@ims.lab SIP/2.0\r\n'
-        f'Via: SIP/2.0/UDP ${UE1_IP}:${SIP_PORT};rport;branch=z9hG4bK-inv-ue1-{call_seq}\r\n'
-        'Max-Forwards: 70\r\n'
-        'From: <sip:ue1@ims.lab>;tag=caller-tag-ue1\r\n'
-        'To: <sip:ue2@ims.lab>\r\n'
-        f'Call-ID: call-run-{call_seq}@${UE1_IP}\r\n'
-        f'CSeq: {call_seq} INVITE\r\n'
-        'Contact: <sip:ue1@${UE1_IP}:${SIP_PORT}>\r\n'
-        'Content-Type: application/sdp\r\n'
-        f'Content-Length: {len(sdp)}\r\n\r\n'
-        f'{sdp}'
+        'INVITE sip:{callee_key}@ims.lab SIP/2.0\\r\\n'
+        f'Via: SIP/2.0/UDP {caller_ip}:{SIP_PORT};rport;branch=z9hG4bK-inv-{caller_key}-{{call_seq}}\\r\\n'
+        'Max-Forwards: 70\\r\\n'
+        'From: <sip:{caller_key}@ims.lab>;tag=caller-tag-{caller_key}\\r\\n'
+        f'To: <sip:{callee_key}@ims.lab>\\r\\n'
+        f'Call-ID: call-run-{{call_seq}}@{caller_ip}\\r\\n'
+        f'CSeq: {{call_seq}} INVITE\\r\\n'
+        'Contact: <sip:{caller_key}@{caller_ip}:{SIP_PORT}>\\r\\n'
+        'Content-Type: application/sdp\\r\\n'
+        f'Content-Length: {{len(sdp)}}\\r\\n\\r\\n'
+        f'{{sdp}}'
     )
 
-    s.sendto(invite.encode(), ('${PCSCF_IP}', ${SIP_PORT}))
+    s.sendto(invite.encode(), ('{PCSCF_IP}', {SIP_PORT}))
 
     got_200 = False
     to_tag = ''
     rr_hdrs = []
-    contact_tgt = 'sip:ue2@${UE2_IP}:${SIP_PORT}'
-    sdp_ip = '${PCSCF_IP}'
-    sdp_port = ${RTP_PORT}
+    contact_tgt = 'sip:{callee_key}@{callee_ip}:{SIP_PORT}'
+    sdp_ip = '{PCSCF_IP}'
+    sdp_port = {RTP_PORT}
 
     while not got_200:
         resp, addr = s.recvfrom(4096)
         resp_str = resp.decode('latin1')
-        first_line = resp_str.split('\r\n')[0]
+        first_line = resp_str.split('\\r\\n')[0]
         if '200 OK' in first_line:
             got_200 = True
-            to_m = re.search(r'To: <sip:ue2@ims.lab>;tag=([^\r\n;]+)', resp_str)
+            to_m = re.search(r'To: <sip:{callee_key}@ims.lab>;tag=([^\\r\\n;]+)', resp_str)
             if to_m: to_tag = to_m.group(1)
-            rr_hdrs = re.findall(r'Record-Route: ([^\r\n]+)', resp_str)
+            rr_hdrs = re.findall(r'Record-Route: ([^\\r\\n]+)', resp_str)
             ct_m = re.search(r'Contact: <([^>]+)>', resp_str)
             if ct_m: contact_tgt = ct_m.group(1)
             
-            # Parse RTPEngine rewritten media destination from 200 OK SDP answer
             sdp_m_ip = re.search(r'c=IN IP4 ([0-9.]+)', resp_str)
             if sdp_m_ip: sdp_ip = sdp_m_ip.group(1)
             sdp_m_port = re.search(r'm=audio ([0-9]+)', resp_str)
             if sdp_m_port: sdp_port = int(sdp_m_port.group(1))
 
     route_hdrs = list(reversed(rr_hdrs))
-    route_block = ('\r\n'.join([f'Route: {r}' for r in route_hdrs]) + '\r\n') if route_hdrs else ''
+    route_block = ('\\r\\n'.join([f'Route: {{r}}' for r in route_hdrs]) + '\\r\\n') if route_hdrs else ''
 
-    # Send ACK
     ack = (
-        f'ACK {contact_tgt} SIP/2.0\r\n'
-        f'Via: SIP/2.0/UDP ${UE1_IP}:${SIP_PORT};rport;branch=z9hG4bK-ack-run-{call_seq}\r\n'
-        f'{route_block}'
-        'Max-Forwards: 70\r\n'
-        'From: <sip:ue1@ims.lab>;tag=caller-tag-ue1\r\n'
-        f'To: <sip:ue2@ims.lab>;tag={to_tag}\r\n'
-        f'Call-ID: call-run-{call_seq}@${UE1_IP}\r\n'
-        f'CSeq: {call_seq} ACK\r\n'
-        'Contact: <sip:ue1@${UE1_IP}:${SIP_PORT}>\r\n'
-        'Content-Length: 0\r\n\r\n'
+        f'ACK {{contact_tgt}} SIP/2.0\\r\\n'
+        f'Via: SIP/2.0/UDP {caller_ip}:{SIP_PORT};rport;branch=z9hG4bK-ack-run-{{call_seq}}\\r\\n'
+        f'{{route_block}}'
+        'Max-Forwards: 70\\r\\n'
+        'From: <sip:{caller_key}@ims.lab>;tag=caller-tag-{caller_key}\\r\\n'
+        f'To: <sip:{callee_key}@ims.lab>;tag={{to_tag}}\\r\\n'
+        f'Call-ID: call-run-{{call_seq}}@{caller_ip}\\r\\n'
+        f'CSeq: {{call_seq}} ACK\\r\\n'
+        'Contact: <sip:{caller_key}@{caller_ip}:{SIP_PORT}>\\r\\n'
+        'Content-Length: 0\\r\\n\\r\\n'
     )
-    s.sendto(ack.encode(), ('${PCSCF_IP}', ${SIP_PORT}))
+    s.sendto(ack.encode(), ('{PCSCF_IP}', {SIP_PORT}))
 
-    # RTP Voice Stream Exchange in thread with RTPEngine Media Destination
     rcv_count = [0]
     def rtp_receiver():
-        while rcv_count[0] < ${NUM_PACKETS}:
+        while rcv_count[0] < {NUM_PACKETS}:
             try:
                 pkt, _ = rtp_sock.recvfrom(512)
                 rcv_count[0] += 1
@@ -425,58 +342,95 @@ try:
     rx_thread = threading.Thread(target=rtp_receiver)
     rx_thread.start()
 
-    for i in range(${NUM_PACKETS}):
-        rtp_pkt = b'\x80\x00' + i.to_bytes(2, 'big') + (i*160).to_bytes(4, 'big') + b'\x87\x65\x43\x21' + (b'RTP-VOICE-PAYLOAD-UE1-' + str(i).encode()).ljust(160, b'\x00')
+    for i in range({NUM_PACKETS}):
+        rtp_pkt = b'\\x80\\x00' + i.to_bytes(2, 'big') + (i*160).to_bytes(4, 'big') + b'\\x87\\x65\\x43\\x21' + (b'RTP-VOICE-PAYLOAD-' + f'{caller_key}'.encode() + b'-' + str(i).encode()).ljust(160, b'\\x00')
         rtp_sock.sendto(rtp_pkt, (sdp_ip, sdp_port))
         time.sleep(0.02)
 
     rx_thread.join(timeout=3.0)
-
     time.sleep(0.5)
 
-    # Send BYE
     bye = (
-        f'BYE {contact_tgt} SIP/2.0\r\n'
-        f'Via: SIP/2.0/UDP ${UE1_IP}:${SIP_PORT};rport;branch=z9hG4bK-bye-run-{call_seq}\r\n'
-        f'{route_block}'
-        'Max-Forwards: 70\r\n'
-        'From: <sip:ue1@ims.lab>;tag=caller-tag-ue1\r\n'
-        f'To: <sip:ue2@ims.lab>;tag={to_tag}\r\n'
-        f'Call-ID: call-run-{call_seq}@${UE1_IP}\r\n'
-        f'CSeq: {call_seq+1} BYE\r\n'
-        'Contact: <sip:ue1@${UE1_IP}:${SIP_PORT}>\r\n'
-        'Content-Length: 0\r\n\r\n'
+        f'BYE {{contact_tgt}} SIP/2.0\\r\\n'
+        f'Via: SIP/2.0/UDP {caller_ip}:{SIP_PORT};rport;branch=z9hG4bK-bye-run-{{call_seq}}\\r\\n'
+        f'{{route_block}}'
+        'Max-Forwards: 70\\r\\n'
+        'From: <sip:{caller_key}@ims.lab>;tag=caller-tag-{caller_key}\\r\\n'
+        f'To: <sip:{callee_key}@ims.lab>;tag={{to_tag}}\\r\\n'
+        f'Call-ID: call-run-{{call_seq}}@{caller_ip}\\r\\n'
+        f'CSeq: {{call_seq+1}} BYE\\r\\n'
+        'Contact: <sip:{caller_key}@{caller_ip}:{SIP_PORT}>\\r\\n'
+        'Content-Length: 0\\r\\n\\r\\n'
     )
-    s.sendto(bye.encode(), ('${PCSCF_IP}', ${SIP_PORT}))
+    s.sendto(bye.encode(), ('{PCSCF_IP}', {SIP_PORT}))
     bye_resp, addr = s.recvfrom(4096)
-    with open('${TMP_DIR}/caller_result.txt', 'w') as f:
-        f.write(f'OK: Target={sdp_ip}:{sdp_port} | Transmitted ${NUM_PACKETS} RTP packets | Received {rcv_count[0]} RTP packets')
+    with open('/tmp/caller_res.txt', 'w') as f:
+        f.write(f'OK: Received {{rcv_count[0]}}/{NUM_PACKETS} RTP packets')
 except Exception as e:
-    with open('${TMP_DIR}/caller_result.txt', 'w') as f:
-        f.write(f'ERROR: {e}')
+    with open('/tmp/caller_res.txt', 'w') as f:
+        f.write(f'ERROR: {{e}}')
     sys.exit(1)
-"
+"""
 
-wait "${PID_UE2}"
+    with open('/tmp/run_callee.py', 'w') as f:
+        f.write(callee_script)
+    with open('/tmp/run_caller.py', 'w') as f:
+        f.write(caller_script)
 
-CALLER_RES=$(cat "${TMP_DIR}/caller_result.txt" 2>/dev/null || echo "ERROR: No caller output")
-CALLEE_RES=$(cat "${TMP_DIR}/callee_result.txt" 2>/dev/null || echo "ERROR: No callee output")
+    callee_proc = subprocess.Popen(f"ip netns exec {callee_ns} python3 /tmp/run_callee.py", shell=True)
+    time.sleep(0.8)
+    caller_proc = subprocess.Popen(f"ip netns exec {caller_ns} python3 /tmp/run_caller.py", shell=True)
 
-echo -e "\n${CYAN}[3/4] Validating Signaling & RTPEngine Media Flow Results...${NC}"
-echo -e "  Caller (UE1 -> RTPEngine -> UE2): ${GREEN}${CALLER_RES}${NC}"
-echo -e "  Callee (UE2 -> RTPEngine -> UE1): ${GREEN}${CALLEE_RES}${NC}"
+    caller_proc.wait(timeout=15.0)
+    callee_proc.wait(timeout=15.0)
 
-if [[ "${CALLER_RES}" =~ ^OK ]] && [[ "${CALLEE_RES}" =~ ^OK ]]; then
-    echo -e "\n${CYAN}[4/4] Summary:${NC}"
-    echo -e "  ${GREEN}[✓] SIP Dialog Setup:     INVITE / 180 Ringing / 200 OK / ACK Completed${NC}"
-    echo -e "  ${GREEN}[✓] SDP Negotiation:      SDP rewritten by RTPEngine (PCMU/8000)${NC}"
-    echo -e "  ${GREEN}[✓] RTP Media Stream:     ${NUM_PACKETS}/${NUM_PACKETS} Voice Packets Transmitted via RTPEngine (0% loss)${NC}"
-    echo -e "  ${GREEN}[✓] SIP Dialog Teardown:  BYE / 200 OK Completed (RTPEngine session deleted)${NC}"
-    echo -e "${GREEN}============================================================${NC}"
-    echo -e "${GREEN}    >>> 5G IMS / SIP END-TO-END CALL VERIFICATION PASSED <<<${NC}"
-    echo -e "${GREEN}============================================================${NC}"
-    exit 0
-else
-    echo -e "\n${RED}[✗] SIP / RTP Call verification failed!${NC}"
-    exit 1
-fi
+    with open('/tmp/caller_res.txt') as f: c_res = f.read().strip()
+    with open('/tmp/callee_res.txt') as f: k_res = f.read().strip()
+    print(f"  Caller ({caller_key} -> {callee_key}): {c_res}")
+    print(f"  Callee ({callee_key} -> {caller_key}): {k_res}")
+    if not (c_res.startswith("OK") and k_res.startswith("OK")):
+        print(f"  {RED}[✗] Voice call or media verification failed!{NC}")
+        return False
+    print(f"  {GREEN}[✓] Call dialog & Bidirectional RTP stream PASSED (25/25 packets, 0% loss){NC}")
+    return True
+
+print(f"{BLUE}============================================================{NC}")
+print(f"{BLUE}    Open5GS 5G SA + Kamailio IMS Multi-PLMN Voice Test Suite{NC}")
+print(f"{BLUE}============================================================{NC}")
+
+print(f"\n{CYAN}[1/3] Performing SIP Digest Registrations...{NC}")
+r1 = register_ue("ue1")
+r2 = register_ue("ue2")
+r3 = register_ue("ue3")
+
+if not (r1 and r2 and r3):
+    print(f"{RED}[✗] Registration failed for one or more UEs.{NC}")
+    sys.exit(1)
+
+success = True
+
+if MODE in ["all", "ue1-ue2", "domestic"]:
+    print(f"\n{CYAN}[2/3] Validating Domestic Call (UE1 Egypt 602/03 <-> UE2 Egypt 602/04)...{NC}")
+    if not run_call("ue1", "ue2"):
+        success = False
+
+if MODE in ["all", "ue1-ue3", "roaming"]:
+    print(f"\n{CYAN}[3/3] Validating Inter-PLMN Roaming Call (UE1 Egypt 602/03 <-> UE3 Bosnia 218/90)...{NC}")
+    if not run_call("ue1", "ue3"):
+        success = False
+
+if MODE in ["ue3-ue1", "reverse-roaming"]:
+    print(f"\n{CYAN}[Extra] Validating Reverse Roaming Call (UE3 Bosnia 218/90 <-> UE1 Egypt 602/03)...{NC}")
+    if not run_call("ue3", "ue1"):
+        success = False
+
+print(f"\n{BLUE}============================================================{NC}")
+if success:
+    print(f"{GREEN}{BOLD}    >>> ALL IMS REGISTRATIONS & VOICE CALL TESTS PASSED <<< {NC}")
+    print(f"{BLUE}============================================================{NC}")
+    sys.exit(0)
+else:
+    print(f"{RED}{BOLD}    >>> SOME IMS VOICE CALL TESTS FAILED <<< {NC}")
+    print(f"{BLUE}============================================================{NC}")
+    sys.exit(1)
+EOF

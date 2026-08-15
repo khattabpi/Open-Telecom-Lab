@@ -7,16 +7,17 @@ This document details the architecture, SIP signaling transactions, RTPEngine me
 ## 1. 🏛️ Architecture & Network Topology
 
 ```
-                  5G SA Control Plane (N1 NAS / N2 NGAP via AMF :38412)
+                  5G SA Control Plane (N2 NGAP via Home AMF :38412 & Visited AMF :38413)
                   5G SA User Plane    (N3 GTP-U via UPF :2152 on ogstun)
                                        │
-                  ┌────────────────────┴────────────────────┐
-                  │                                         │
-       [UE1: 10.46.0.7:5060]                     [UE2: 10.46.0.8:5060]
-       IMSI: 602030000000001 (602/03)            IMSI: 602040000000002 (602/04)
-       SIP: sip:ue1@ims.lab                      SIP: sip:ue2@ims.lab
-                  │                                         │
-                  └────────────────────┬────────────────────┘
+                  ┌────────────────────┼────────────────────┐
+                  │                    │                    │
+        [UE1: 10.46.0.10:5060]  [UE2: 10.46.0.11:5060]  [UE3: 10.46.0.100:5060]
+        IMSI: 602030000000001   IMSI: 602040000000002   IMSI: 602030000000003
+        HPLMN: 602/03 (Home)    HPLMN: 602/04 (Home)    HPLMN: 602/03 | VPLMN: 218/90
+        SIP: sip:ue1@ims.lab    SIP: sip:ue2@ims.lab    SIP: sip:ue3@ims.lab
+                  │                    │                    │
+                  └────────────────────┼────────────────────┘
                                        │ SIP Signaling (10.46.0.0/16)
                                        ▼
     ┌─────────────────────────────────────────────────────────────────────────┐
@@ -195,3 +196,19 @@ To capture live SIP signaling and RTPEngine media traffic during a call:
 # Capture SIP signaling on UPF ogstun interface
 sudo tcpdump -i ogstun -n -s 0 -vvv "udp port 5060 or udp portrange 20000-20100" -w /tmp/ims-call.pcap
 ```
+
+---
+
+## 6. ⚖️ 3GPP Roaming Capabilities & Technical Boundaries
+
+This laboratory is strictly classified as:
+> **"5G Inter-PLMN Roaming Laboratory with Home-Network Authentication, Local Breakout, and IMS Roaming / Inter-PLMN Voice Service."**
+
+### Technical Truth Matrix
+
+- **5G Authentication**: Real 5G-AKA authentication handled by Home AUSF over N12 `Nausf_UEAuthentication` with `servingNetworkName: 5G:mnc090.mcc218.3gppnetwork.org`.
+- **IMS Authentication**: Laboratory SIP Digest MD5 authentication against SQLite subscriber database in S-CSCF.
+- **IMS Inter-Operator Routing**: Laboratory / emulated inter-operator IMS routing.
+- **SEPP / N32**: Not implemented (cross-PLMN SBI uses direct Kubernetes cluster DNS).
+- **IBCF / TrGW**: Not implemented (direct P-CSCF/S-CSCF routing with RTPEngine proxying).
+- **Home-Routed (HR) Roaming (N16/N9)**: Not supported in Open5GS 2.8.0; user plane uses Local Breakout (LBO).

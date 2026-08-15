@@ -216,6 +216,53 @@ spec:
           configMap:
             name: open5gs-config
 ---
+# --- Visited AMF (V-AMF - Bosnia 218/90) Service & Deployment ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-v-amf
+  namespace: open5gs
+spec:
+  type: NodePort
+  ports:
+    - port: 7777
+      name: sbi
+      protocol: TCP
+    - port: 38413
+      nodePort: 38413
+      name: ngap
+      protocol: SCTP
+  selector:
+    app: open5gs-v-amf
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-v-amf
+  namespace: open5gs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-v-amf
+  template:
+    metadata:
+      labels:
+        app: open5gs-v-amf
+    spec:
+      containers:
+        - name: v-amf
+          image: gradiant/open5gs:2.8.0
+          command: ["open5gs-amfd", "-c", "/etc/open5gs/v-amf.yaml"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/open5gs/v-amf.yaml
+              subPath: v-amf.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: open5gs-config
+---
 # --- SMF Service & Deployment ---
 apiVersion: v1
 kind: Service
@@ -256,6 +303,51 @@ spec:
             - name: config-volume
               mountPath: /etc/open5gs/smf.yaml
               subPath: smf.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: open5gs-config
+---
+# --- Visited SMF (V-SMF - Bosnia 218/90) Service & Deployment ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-v-smf
+  namespace: open5gs
+spec:
+  ports:
+    - port: 7777
+      name: sbi
+      protocol: TCP
+    - port: 8805
+      name: pfcp
+      protocol: UDP
+  selector:
+    app: open5gs-v-smf
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-v-smf
+  namespace: open5gs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-v-smf
+  template:
+    metadata:
+      labels:
+        app: open5gs-v-smf
+    spec:
+      containers:
+        - name: v-smf
+          image: gradiant/open5gs:2.8.0
+          command: ["open5gs-smfd", "-c", "/etc/open5gs/v-smf.yaml"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/open5gs/v-smf.yaml
+              subPath: v-smf.yaml
       volumes:
         - name: config-volume
           configMap:

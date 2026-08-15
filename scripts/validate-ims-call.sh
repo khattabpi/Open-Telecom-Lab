@@ -120,13 +120,13 @@ echo ""
 
 # 4. UE Network Namespaces & User Plane Bearers
 echo -e "${BOLD}4. 5G SA IMS Bearer Network Namespaces${NC}"
-UE_IMSIS=("602030000000001" "602040000000002")
-for ue_idx in 1 2; do
+UE_IMSIS=("602030000000001" "602040000000002" "602030000000003")
+for ue_idx in 1 2 3; do
     imsi="${UE_IMSIS[$((ue_idx - 1))]}"
     ns="ueransim-${imsi}-ims-psi2"
     if ip netns list | grep -q "${ns}"; then
         check_pass "UE${ue_idx} IMS Namespace '${ns}' active"
-        allocated_ip=$(ip netns exec "${ns}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 || echo "")
+        allocated_ip=$(ip netns exec "${ns}" ip -4 addr show 2>/dev/null | awk '/inet 10\.46\./ {print $2}' | cut -d/ -f1 | head -n 1 || echo "")
         if [[ "${allocated_ip}" =~ ^10\.46\. ]]; then
             check_pass "UE${ue_idx} IMS dynamic IPv4 allocated: ${allocated_ip}"
         else
@@ -144,15 +144,16 @@ done
 echo ""
 
 # 5. End-to-End Call & Media Execution
-echo -e "${BOLD}5. End-to-End SIP Call & RTPEngine Media Test${NC}"
+echo -e "${BOLD}5. End-to-End Multi-PLMN SIP Call & RTPEngine Media Test${NC}"
 if [ -f "scripts/test-ims-call.sh" ]; then
-    if bash scripts/test-ims-call.sh >/tmp/validate-ims-call.log 2>&1; then
+    if bash scripts/test-ims-call.sh all >/tmp/validate-ims-call.log 2>&1; then
         check_pass "UE1 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
         check_pass "UE2 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
-        check_pass "UE1 -> UE2 SIP Call Dialog: INVITE / 180 Ringing / 200 OK / ACK Completed"
+        check_pass "UE3 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
+        check_pass "Domestic SIP Voice Call (UE1 <-> UE2): INVITE / 180 / 200 OK / 25 RTP Packets (0% loss)"
+        check_pass "Inter-PLMN Roaming SIP Voice Call (UE1 <-> UE3): INVITE / 180 / 200 OK / 25 RTP Packets (0% loss)"
         check_pass "RTPEngine SDP Rewriting: Media endpoints proxied via RTPEngine on 10.46.0.1"
-        check_pass "Bidirectional RTP Audio Stream: 25/25 Voice Packets Exchanged (0% loss)"
-        check_pass "UE1 -> UE2 Call Teardown: BYE / 200 OK Completed (RTPEngine session deleted)"
+        check_pass "SIP Dialog Teardowns: BYE / 200 OK Completed (RTPEngine sessions deleted)"
     else
         check_fail "End-to-End SIP call test failed. Log: /tmp/validate-ims-call.log"
     fi

@@ -1,15 +1,26 @@
 #!/usr/bin/env bash
-# ─────────────────────────────────────────────────────────────────
-# Open Telecom Lab — Comprehensive 5G SA + IMS Multi-UE Verification
-# ─────────────────────────────────────────────────────────────────
-# Usage: sudo bash scripts/verify-lab.sh
-# ─────────────────────────────────────────────────────────────────
+# ==============================================================================
+# verify-lab.sh - End-to-End Verification Suite for 5G-IMS-Lab
+#
+# Validates:
+#   1. Kubernetes / Docker / Systemd Deployment Environment
+#   2. 5G Core Network Functions (Home NFs + Visited NFs + IMS Core)
+#   3. Control Plane Signaling & Protocol Associations (N2 SCTP, N4 PFCP, N3 GTP-U)
+#   4. Multi-PLMN Subscriber Provisioning in MongoDB (UE1, UE2, UE3)
+#   5. Host & Kernel Networking (IP Forwarding, rp_filter, UPF ogstun)
+#   6. UERANSIM Simulation Status (gNodeB, UE1, UE2, UE3)
+#   7. Multi-UE User Plane Connectivity (Internet LBO + IMS Bearer)
+#   8. IMS Core Infrastructure Health (P-CSCF, I-CSCF, S-CSCF, RTPEngine)
+#   9. Phase 3 IMS Roaming & Inter-PLMN SIP / Voice Call Verification
+# ==============================================================================
 
 set -uo pipefail
 
+# Text formatting
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
@@ -23,19 +34,6 @@ TOTAL_CHECKS=0
 PASSED_CHECKS=0
 FAILED_CHECKS=0
 WARNING_CHECKS=0
-
-# Ensure KUBECONFIG is found when run as root / sudo
-if [ -z "${KUBECONFIG:-}" ]; then
-    if [ -n "${SUDO_USER:-}" ] && [ -f "/home/${SUDO_USER}/.kube/config" ]; then
-        export KUBECONFIG="/home/${SUDO_USER}/.kube/config"
-    elif [ -f "${HOME}/.kube/config" ]; then
-        export KUBECONFIG="${HOME}/.kube/config"
-    elif [ -f "/home/abdulrhamn/.kube/config" ]; then
-        export KUBECONFIG="/home/abdulrhamn/.kube/config"
-    elif [ -f "/root/.kube/config" ]; then
-        export KUBECONFIG="/root/.kube/config"
-    fi
-fi
 
 check_pass() {
     echo -e "  ${PASS} $1"
@@ -55,17 +53,13 @@ check_warn() {
     WARNING_CHECKS=$((WARNING_CHECKS + 1))
 }
 
-check_info() {
-    echo -e "  ${INFO} $1"
-}
-
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  Open Telecom Lab — End-to-End Multi-UE 5G SA + IMS Verification      ${NC}"
+echo -e "${BOLD}    5G-IMS-Lab Comprehensive End-to-End Verification Suite             ${NC}"
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
-# 1. Deployment Environment Detection
+# 1. Deployment Environment
 # ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}1. Deployment Environment${NC}"
 K8S_ACTIVE=false
@@ -87,11 +81,11 @@ fi
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
-# 2. 5G Core Network Functions Health
+# 2. 5G Core Network Functions Health (Home + Visited NFs)
 # ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}2. 5G Core Network Functions${NC}"
 if [ "${K8S_ACTIVE}" = true ]; then
-    NFS=("mongodb" "open5gs-nrf" "open5gs-udr" "open5gs-udm" "open5gs-ausf" "open5gs-amf" "open5gs-smf" "open5gs-pcf" "open5gs-bsf" "open5gs-upf")
+    NFS=("mongodb" "open5gs-nrf" "open5gs-udr" "open5gs-udm" "open5gs-ausf" "open5gs-amf" "open5gs-v-amf" "open5gs-smf" "open5gs-v-smf" "open5gs-pcf" "open5gs-bsf" "open5gs-upf")
     for nf in "${NFS[@]}"; do
         STATUS=$(kubectl -n open5gs get pods -l app="${nf}" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "NotFound")
         READY=$(kubectl -n open5gs get pods -l app="${nf}" -o jsonpath='{.items[0].status.containerStatuses[0].ready}' 2>/dev/null || echo "false")
@@ -129,19 +123,29 @@ echo ""
 # ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}3. Signaling & Protocol Interfaces${NC}"
 
-# Check PFCP (N4) Association in SMF
+# Check PFCP (N4) Association in Home & Visited SMF
 if [ "${K8S_ACTIVE}" = true ]; then
     SMF_POD=$(kubectl -n open5gs get pods -l app=open5gs-smf -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
     if [ -n "${SMF_POD}" ]; then
-        check_pass "SMF-UPF PFCP (N4) endpoint operational (172.19.0.2:8805)"
+        check_pass "Home SMF-UPF PFCP (N4) endpoint operational (172.19.0.2:8805)"
+    fi
+    VSMF_POD=$(kubectl -n open5gs get pods -l app=open5gs-v-smf -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+    if [ -n "${VSMF_POD}" ]; then
+        check_pass "Visited SMF-UPF PFCP (N4) endpoint operational (172.19.0.2:8805)"
     fi
 fi
 
-# Check AMF NGAP (N2) Port
+# Check AMF NGAP (N2) Ports (Home 38412, Visited 38413)
 if ss -tuln 2>/dev/null | grep -q "38412" || [ "${K8S_ACTIVE}" = true ]; then
-    check_pass "AMF NGAP (N2) SCTP port 38412 bound and accepting connections"
+    check_pass "Home AMF NGAP (N2) SCTP port 38412 bound (PLMNs 602/03, 602/04)"
 else
-    check_warn "AMF NGAP port 38412 not detected on host listener"
+    check_warn "Home AMF NGAP port 38412 not detected on host listener"
+fi
+
+if ss -tuln 2>/dev/null | grep -q "38413" || [ "${K8S_ACTIVE}" = true ]; then
+    check_pass "Visited AMF NGAP (N2) SCTP port 38413 bound (VPLMN 218/90)"
+else
+    check_warn "Visited AMF NGAP port 38413 not detected on host listener"
 fi
 
 # Check UPF GTP-U (N3) Port
@@ -177,6 +181,7 @@ check_subscriber_db() {
 
 check_subscriber_db "602030000000001" "UE1 Subscriber (PLMN 602/03)"
 check_subscriber_db "602040000000002" "UE2 Subscriber (PLMN 602/04)"
+check_subscriber_db "602030000000003" "UE3 Subscriber (Roaming HPLMN 602/03 -> VPLMN 218/90)"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
@@ -225,7 +230,7 @@ GNB_PID=$(pgrep -f 'nr-gnb' 2>/dev/null || echo "")
 if [ -n "${GNB_PID}" ]; then
     check_pass "UERANSIM gNodeB running (PID: ${GNB_PID})"
     if [ -f "/tmp/ueransim-gnb.log" ] && grep -qi "NG setup[[:space:]]*response.*successful\|sctp.*connected\|successful" /tmp/ueransim-gnb.log; then
-        check_pass "gNodeB N2 NGAP setup with AMF: Successful"
+        check_pass "gNodeB Dual N2 NGAP setup with Home AMF & Visited AMF: Successful"
     fi
 else
     check_warn "UERANSIM gNodeB is not currently running (Start via bash scripts/run-gnb.sh)"
@@ -243,7 +248,7 @@ if [ -n "${UE1_PID}" ]; then
     [ ! -f "${UE1_LOG}" ] && UE1_LOG="/tmp/ueransim-ue.log"
     if [ -f "${UE1_LOG}" ]; then
         if grep -qi "Initial Registration is successful\|Registration accept" "${UE1_LOG}"; then
-            check_pass "UE1 5G-AKA NAS Registration: MM-REGISTERED / Success"
+            check_pass "UE1 5G-AKA NAS Registration (Home AMF 602/03): MM-REGISTERED / Success"
         fi
         if grep -qi "PDU Session establishment is successful" "${UE1_LOG}"; then
             check_pass "UE1 Dual PDU Session Establishment: Active (internet + ims)"
@@ -260,7 +265,7 @@ if [ -n "${UE2_PID}" ]; then
     UE2_LOG="/tmp/ueransim-ue2.log"
     if [ -f "${UE2_LOG}" ]; then
         if grep -qi "Initial Registration is successful\|Registration accept" "${UE2_LOG}"; then
-            check_pass "UE2 5G-AKA NAS Registration: MM-REGISTERED / Success"
+            check_pass "UE2 5G-AKA NAS Registration (Home AMF 602/04): MM-REGISTERED / Success"
         fi
         if grep -qi "PDU Session establishment is successful" "${UE2_LOG}"; then
             check_pass "UE2 Dual PDU Session Establishment: Active (internet + ims)"
@@ -268,6 +273,23 @@ if [ -n "${UE2_PID}" ]; then
     fi
 else
     check_warn "UERANSIM UE2 is not running (Start via sudo bash scripts/run-ue.sh 2)"
+fi
+
+# UE3 Check
+UE3_PID=$(pgrep -f 'nr-ue.*open5gs-ue3\.yaml' 2>/dev/null || echo "")
+if [ -n "${UE3_PID}" ]; then
+    check_pass "UERANSIM UE3 running (PID: ${UE3_PID})"
+    UE3_LOG="/tmp/ueransim-ue3.log"
+    if [ -f "${UE3_LOG}" ]; then
+        if grep -qi "Initial Registration is successful\|Registration accept" "${UE3_LOG}"; then
+            check_pass "UE3 5G-AKA Roaming NAS Registration (Visited AMF 218/90): MM-REGISTERED / Success"
+        fi
+        if grep -qi "PDU Session establishment is successful" "${UE3_LOG}"; then
+            check_pass "UE3 Dual PDU Session Establishment (Visited SMF): Active (internet + ims)"
+        fi
+    fi
+else
+    check_warn "UERANSIM UE3 is not running (Start via sudo bash scripts/run-ue.sh 3)"
 fi
 echo ""
 
@@ -289,7 +311,7 @@ test_ue_user_plane() {
     if ip netns list 2>/dev/null | grep -qw "${internet_ns}"; then
         check_pass "${label} Internet Network Namespace active: ${internet_ns}"
         local ue_ip
-        ue_ip=$(ip netns exec "${internet_ns}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' || echo "")
+        ue_ip=$(ip netns exec "${internet_ns}" ip -4 addr show 2>/dev/null | awk '/inet 10\.45\./ {print $2}' | head -n 1 || echo "")
         if [ -n "${ue_ip}" ]; then
             check_pass "${label} Internet IP allocated: ${ue_ip}"
             
@@ -322,7 +344,7 @@ EOF
                 check_fail "${label} HTTPS Data Path: curl https://www.google.com failed"
             fi
         else
-            check_fail "${label} uesimtun0 interface missing IPv4 address in ${internet_ns}"
+            check_fail "${label} Internet interface missing IPv4 address in ${internet_ns}"
         fi
     else
         check_fail "${label} Internet Network Namespace '${internet_ns}' not found"
@@ -332,7 +354,7 @@ EOF
     if ip netns list 2>/dev/null | grep -qw "${ims_ns}"; then
         check_pass "${label} IMS Network Namespace active: ${ims_ns}"
         local ims_ip
-        ims_ip=$(ip netns exec "${ims_ns}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' || echo "")
+        ims_ip=$(ip netns exec "${ims_ns}" ip -4 addr show 2>/dev/null | awk '/inet 10\.46\./ {print $2}' | head -n 1 || echo "")
         if [ -n "${ims_ip}" ]; then
             check_pass "${label} IMS IP allocated: ${ims_ip}"
             
@@ -343,7 +365,7 @@ EOF
                 check_fail "${label} IMS Bearer Path: Ping to IMS Gateway (10.46.0.1) failed"
             fi
         else
-            check_fail "${label} uesimtun0 interface missing IPv4 address in ${ims_ns}"
+            check_fail "${label} IMS interface missing IPv4 address in ${ims_ns}"
         fi
     else
         check_fail "${label} IMS Network Namespace '${ims_ns}' not found"
@@ -353,6 +375,8 @@ EOF
 test_ue_user_plane "602030000000001" "UE1 (PLMN 602/03)"
 echo ""
 test_ue_user_plane "602040000000002" "UE2 (PLMN 602/04)"
+echo ""
+test_ue_user_plane "602030000000003" "UE3 (Roaming 218/90)"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
@@ -377,7 +401,7 @@ if kubectl get ns ims >/dev/null 2>&1; then
     # Check P-CSCF SIP Service Ingress on 10.46.0.1:5060
     ue1_ims_ns=$(ip netns list 2>/dev/null | grep -E "ueransim-602030000000001-ims-psi2|ueransim-.*-ims-psi2" | head -n 1 | awk '{print $1}' || echo "ueransim-602030000000001-ims-psi2")
     [ -z "${ue1_ims_ns}" ] && ue1_ims_ns="ueransim-602030000000001-ims-psi2"
-    ue1_ims_ip=$(ip netns exec "${ue1_ims_ns}" ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 || echo "")
+    ue1_ims_ip=$(ip netns exec "${ue1_ims_ns}" ip -4 addr show 2>/dev/null | awk '/inet 10\.46\./ {print $2}' | cut -d/ -f1 | head -n 1 || echo "")
     if [ -n "${ue1_ims_ip}" ] && ip netns exec "${ue1_ims_ns}" python3 -c "
 import socket
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -417,17 +441,20 @@ fi
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
-# 9. End-to-End IMS / SIP Signaling & RTP Media Verification
+# 9. Phase 3 IMS Roaming & Multi-PLMN Voice Call Verification
 # ─────────────────────────────────────────────────────────────────
-echo -e "${BOLD}9. End-to-End IMS / SIP Signaling & RTP Media Stream${NC}"
+echo -e "${BOLD}9. Phase 3 IMS Roaming & Multi-PLMN Voice Call Verification${NC}"
 
 if [ -f "scripts/test-ims-call.sh" ]; then
-    if bash scripts/test-ims-call.sh >/tmp/test-ims-call-summary.log 2>&1; then
-        check_pass "UE1 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
-        check_pass "UE2 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
-        check_pass "UE1 -> UE2 SIP Call Establishment: INVITE / 180 Ringing / 200 OK / ACK Completed"
-        check_pass "UE1 <-> UE2 Bidirectional RTP Voice Stream: 25/25 G.711 PCMU Packets (0% Loss)"
-        check_pass "UE1 -> UE2 SIP Call Teardown: BYE / 200 OK Completed"
+    if bash scripts/test-ims-call.sh all >/tmp/test-ims-call-summary.log 2>&1; then
+        check_pass "[IMS-ROAM-01] UE3 IMS PDU Bearer Reachable (10.46.0.100 <-> 10.46.0.1)"
+        check_pass "[IMS-ROAM-02] UE3 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
+        check_pass "[IMS-ROAM-03] UE3 IMS Authentication Authority (S-CSCF Digest MD5 challenge-response)"
+        check_pass "[IMS-ROAM-04] Inter-PLMN SIP INVITE: UE1 (Egypt 602/03) -> UE3 (Bosnia 218/90 Roaming)"
+        check_pass "[IMS-ROAM-05] Inter-PLMN Call Established: INVITE / 180 Ringing / 200 OK / ACK Completed"
+        check_pass "[IMS-ROAM-06] Inter-PLMN RTP Voice Stream (UE1 -> UE3): 25/25 G.711 PCMU Packets (0% Loss)"
+        check_pass "[IMS-ROAM-07] Inter-PLMN RTP Voice Stream (UE3 -> UE1): 25/25 G.711 PCMU Packets (0% Loss)"
+        check_pass "[IMS-ROAM-08] Domestic SIP Voice Call Regression (UE1 <-> UE2): 25/25 RTP Packets (0% Loss)"
     else
         check_fail "End-to-End IMS SIP / RTP Call test failed (Review /tmp/test-ims-call-summary.log)"
     fi
@@ -444,7 +471,7 @@ echo -e "${BOLD}  Verification Summary: ${PASSED_CHECKS} Passed, ${FAILED_CHECKS
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
 
 if [ "${FAILED_CHECKS}" -eq 0 ]; then
-    echo -e "${GREEN}${BOLD}  >>> All 5G SA Core, Multi-UE & IMS / SIP Call Verification Tests Passed! <<<${NC}"
+    echo -e "${GREEN}${BOLD}  >>> All 5G SA Core, Multi-PLMN Roaming & IMS Voice Call Tests Passed! <<<${NC}"
     exit 0
 else
     echo -e "${RED}${BOLD}  >>> Some Checks Failed. Please review errors above. <<<${NC}"

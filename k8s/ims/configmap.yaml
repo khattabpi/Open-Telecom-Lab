@@ -27,8 +27,11 @@ data:
         ("602030000000001", "ims.lab", "password123"),
         ("ue2", "ims.lab", "password123"),
         ("602040000000002", "ims.lab", "password123"),
+        ("ue3", "ims.lab", "password123"),
+        ("602030000000003", "ims.lab", "password123"),
         ("ue1", "10.46.0.1", "password123"),
-        ("ue2", "10.46.0.1", "password123")
+        ("ue2", "10.46.0.1", "password123"),
+        ("ue3", "10.46.0.1", "password123")
     ]
     for u, d, p in subscribers:
         cur.execute("INSERT OR REPLACE INTO subscriber (username, domain, password) VALUES (?, ?, ?)", (u, d, p))

@@ -12,6 +12,8 @@ plmnList:
     mnc: '03'
   - mcc: '602'
     mnc: '04'
+  - mcc: '218'
+    mnc: '90'
 
 # NR Cell Identity
 nci: '0x000000010'
@@ -26,7 +28,9 @@ gtpIp: 172.19.0.1      # N3 interface (GTP-U endpoint for UPF downlink)
 # AMF Configuration (Target kind control-plane node IP)
 amfConfigs:
   - address: 172.19.0.2
-    port: 38412          # SCTP port for NGAP
+    port: 38412          # SCTP port for Home AMF (602/03, 602/04)
+  - address: 172.19.0.2
+    port: 38413          # SCTP port for Visited AMF (218/90)
 
 # Network Slice Support
 slices:

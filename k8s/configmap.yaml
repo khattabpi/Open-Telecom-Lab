@@ -15,7 +15,7 @@ data:
 
   amf.yaml: |
     logger:
-      level: info
+      level: debug
     amf:
       amf_name: open5gs-amf1
       time:
@@ -74,9 +74,53 @@ data:
         integrity_order: [ NIA2, NIA1, NIA0 ]
         ciphering_order: [ NEA0, NEA1, NEA2 ]
 
+  v-amf.yaml: |
+    logger:
+      level: debug
+    amf:
+      amf_name: open5gs-v-amf1
+      time:
+        t3512:
+          value: 540
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+            advertise: open5gs-v-amf.open5gs.svc.cluster.local
+        client:
+          nrf:
+            - uri: http://open5gs-nrf:7777
+      ngap:
+        server:
+          - address: 0.0.0.0
+            port: 38413
+      guami:
+        - plmn_id:
+            mcc: "218"
+            mnc: "90"
+          amf_id:
+            region: 2
+            set: 1
+            pointer: 1
+      tai:
+        - plmn_id:
+            mcc: "218"
+            mnc: "90"
+          tac: 1
+      plmn_support:
+        - plmn_id:
+            mcc: "218"
+            mnc: "90"
+          s_nssai:
+            - sst: 1
+              sd: ffffff
+      security:
+        integrity_order: [ NIA2, NIA1, NIA0 ]
+        ciphering_order: [ NEA0, NEA1, NEA2 ]
+
   ausf.yaml: |
     logger:
-      level: info
+      level: debug
     ausf:
       sbi:
         server:
@@ -89,7 +133,7 @@ data:
 
   udm.yaml: |
     logger:
-      level: info
+      level: debug
     udm:
       sbi:
         server:
@@ -102,7 +146,7 @@ data:
 
   udr.yaml: |
     logger:
-      level: info
+      level: debug
     db_uri: mongodb://mongodb:27017/open5gs
     udr:
       sbi:
@@ -116,12 +160,8 @@ data:
 
   smf.yaml: |
     logger:
-      level: info
+      level: debug
     smf:
-      # Advertise which slice(s) + DNN this SMF serves to the NRF. Without this
-      # info block the SMF registers with no S-NSSAI/DNN, so the AMF's slice-
-      # aware Nnrf discovery finds "No V-SMF Instance" and falls back to the
-      # (absent) NSSF -> PDU session fails with PAYLOAD_NOT_FORWARDED.
       info:
         - s_nssai:
             - sst: 1
@@ -129,6 +169,15 @@ data:
               dnn:
                 - internet
                 - ims
+          tai:
+            - plmn_id:
+                mcc: "602"
+                mnc: "03"
+              tac: 1
+            - plmn_id:
+                mcc: "602"
+                mnc: "04"
+              tac: 1
       sbi:
         server:
           - address: 0.0.0.0
@@ -142,9 +191,6 @@ data:
           - address: 0.0.0.0
       pfcp:
         server:
-          # Bind to the pod interface so the SMF advertises its real pod IP as
-          # the PFCP node_id (not 0.0.0.0). Otherwise the UPF heartbeats to
-          # 0.0.0.0 and the N4 association flaps.
           - dev: eth0
             port: 8805
         client:
@@ -154,9 +200,63 @@ data:
       session:
         - subnet: 10.45.0.0/16
           gateway: 10.45.0.1
+          range:
+            - 10.45.0.10-10.45.0.99
           dnn: internet
         - subnet: 10.46.0.0/16
           gateway: 10.46.0.1
+          range:
+            - 10.46.0.10-10.46.0.99
+          dnn: ims
+      dns:
+        - 8.8.8.8
+        - 1.1.1.1
+
+  v-smf.yaml: |
+    logger:
+      level: debug
+    smf:
+      info:
+        - s_nssai:
+            - sst: 1
+              sd: ffffff
+              dnn:
+                - internet
+                - ims
+          tai:
+            - plmn_id:
+                mcc: "218"
+                mnc: "90"
+              tac: 1
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+            advertise: open5gs-v-smf.open5gs.svc.cluster.local
+        client:
+          nrf:
+            - uri: http://open5gs-nrf:7777
+      gtpu:
+        server:
+          - address: 0.0.0.0
+      pfcp:
+        server:
+          - dev: eth0
+            port: 8805
+        client:
+          upf:
+            - address: 172.19.0.2
+              port: 8805
+      session:
+        - subnet: 10.45.0.0/16
+          gateway: 10.45.0.1
+          range:
+            - 10.45.0.100-10.45.0.199
+          dnn: internet
+        - subnet: 10.46.0.0/16
+          gateway: 10.46.0.1
+          range:
+            - 10.46.0.100-10.46.0.199
           dnn: ims
       dns:
         - 8.8.8.8
