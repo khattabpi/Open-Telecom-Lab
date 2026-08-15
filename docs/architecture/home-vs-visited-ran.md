@@ -87,12 +87,19 @@ flowchart TB
 
 ## 4. UE3 Roaming Radio Attachment & User Plane Verification
 
-### 4.1 Radio Attachment Isolation
+### 4.1 Radio Attachment Isolation & UERANSIM Internal Indexing
 - **UE1 & UE2 Configuration (`gnbSearchList`):** Configured with `127.0.0.1`, forcing radio search and discovery exclusively toward `gNodeB-Home`.
 - **UE3 Configuration (`gnbSearchList`):** Configured with `127.0.0.2`, forcing radio search and discovery exclusively toward `gNodeB-Visited`.
-- **Runtime Log Evidence:**
-  - `gNodeB-Home` log (`/tmp/ueransim-gnb-home.log`) receives RRC setup only for UE1 and UE2.
-  - `gNodeB-Visited` log (`/tmp/ueransim-gnb-visited.log`) receives RRC setup exclusively for UE3.
+- **UERANSIM `UE[x]` Logging Nuance:**
+  - In UERANSIM, the identifier `UE[x]` logged by `nr-gnb` represents an internal sequential array index of RRC context allocations within that specific process. It is **NOT** the subscriber IMSI or SUPI.
+  - When `gNodeB-Home` initializes, any transient radio scans or sequential UE startups increment this counter (`UE[1]`, `UE[2]`, `UE[3]`, etc.).
+  - Timestamp correlation between UE logs, gNodeB logs, and Open5GS AMF logs confirms:
+    - `gNodeB-Home`'s `UE[3]` context corresponds to **UE1** (`imsi-602030000000001` at `22:23:09`).
+    - `gNodeB-Home`'s `UE[4]` context corresponds to **UE2** (`imsi-602040000000002` at `22:23:13`).
+    - `gNodeB-Visited`'s `UE[2]` context corresponds to **UE3** (`imsi-602030000000003` at `22:23:20`).
+- **Open5GS Core Confirmation:**
+  - **Home AMF (`open5gs-amf`):** Records registrations ONLY for `imsi-602030000000001` and `imsi-602040000000002` on Cell ID `0x000000010`. Zero occurrences of `imsi-602030000000003`.
+  - **Visited AMF (`open5gs-v-amf`):** Records registration exclusively for `imsi-602030000000003` on Cell ID `0x000000020` (VPLMN `218/90`). Zero occurrences of Home UEs.
 
 ### 4.2 N3 GTP-U / Local Breakout (LBO) Separation
 During user-plane transmission (e.g., ping, SIP, or RTP voice):
