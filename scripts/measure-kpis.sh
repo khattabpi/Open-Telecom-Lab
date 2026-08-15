@@ -15,6 +15,10 @@
 
 set -euo pipefail
 
+if [ "${EUID}" -ne 0 ]; then
+    exec sudo bash "$0" "$@"
+fi
+
 TARGET="${1:-all}"
 FORMAT="table"
 

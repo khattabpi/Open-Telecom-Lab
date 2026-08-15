@@ -32,10 +32,18 @@ data:
         sip_code VARCHAR(3) DEFAULT '' NOT NULL,
         sip_reason VARCHAR(128) DEFAULT '' NOT NULL,
         time DATETIME NOT NULL,
-        caller VARCHAR(128) DEFAULT '' NOT NULL,
-        callee VARCHAR(128) DEFAULT '' NOT NULL,
-        src_ip VARCHAR(64) DEFAULT '' NOT NULL,
-        dst_ip VARCHAR(64) DEFAULT '' NOT NULL
+        time_attr VARCHAR(32) DEFAULT '',
+        caller VARCHAR(128) DEFAULT '',
+        callee VARCHAR(128) DEFAULT '',
+        src_ip VARCHAR(64) DEFAULT '',
+        dst_ip VARCHAR(64) DEFAULT ''
+    )''')
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS acc_cdrs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        start_time VARCHAR(32) DEFAULT '' NOT NULL,
+        end_time VARCHAR(32) DEFAULT '' NOT NULL,
+        duration INTEGER DEFAULT 0 NOT NULL
     )''')
     cur.execute('''
     CREATE TABLE IF NOT EXISTS missed_calls (
@@ -47,10 +55,10 @@ data:
         sip_code VARCHAR(3) DEFAULT '' NOT NULL,
         sip_reason VARCHAR(128) DEFAULT '' NOT NULL,
         time DATETIME NOT NULL,
-        caller VARCHAR(128) DEFAULT '' NOT NULL,
-        callee VARCHAR(128) DEFAULT '' NOT NULL,
-        src_ip VARCHAR(64) DEFAULT '' NOT NULL,
-        dst_ip VARCHAR(64) DEFAULT '' NOT NULL
+        caller VARCHAR(128) DEFAULT '',
+        callee VARCHAR(128) DEFAULT '',
+        src_ip VARCHAR(64) DEFAULT '',
+        dst_ip VARCHAR(64) DEFAULT ''
     )''')
     cur.execute('''
     CREATE TABLE IF NOT EXISTS cdrs (
@@ -340,10 +348,9 @@ data:
     modparam("acc", "db_missed_flag", 2)
     modparam("acc", "db_table_acc", "acc")
     modparam("acc", "db_table_missed_calls", "missed_calls")
-    modparam("acc", "time_mode", 1)
+    modparam("acc", "time_mode", 0)
     modparam("acc", "db_extra", "caller=$fu; callee=$ru; src_ip=$si; dst_ip=$du")
-    modparam("acc", "cdr_enable", 1)
-    modparam("acc", "cdrs_table", "acc_cdrs")
+    modparam("acc", "cdr_enable", 0)
 
     request_route {
         force_rport();

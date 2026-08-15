@@ -18,6 +18,11 @@
 
 set -euo pipefail
 
+# Ensure script executes with root privileges required for network namespaces and SIP socket operations
+if [ "${EUID}" -ne 0 ]; then
+    exec sudo bash "$0" "$@"
+fi
+
 MODE="${1:-all}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -49,12 +54,15 @@ UE_MAP = {
 
 def get_ue_ip(imsi):
     ns = f"ueransim-{imsi}-ims-psi2"
-    cmd = f"ip netns exec {ns} ip -4 addr show 2>/dev/null"
+    cmd = f"ip netns exec {ns} ip -4 addr show"
     res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if res.returncode != 0:
+        err_msg = res.stderr.strip() or res.stdout.strip() or "Unknown error"
+        raise RuntimeError(f"Failed to inspect network namespace '{ns}' (exit code {res.returncode}): {err_msg}")
     m = re.search(r'inet (10\.46\.[0-9.]+)/\d+', res.stdout)
     if m:
         return m.group(1), ns
-    raise RuntimeError(f"IMS IPv4 (10.46.x.x) not found in namespace '{ns}'. Is UE running with IMS PDU session?")
+    raise RuntimeError(f"IMS IPv4 (10.46.x.x) not found in namespace '{ns}'. Output was:\n{res.stdout.strip()}")
 
 def register_ue(ue_key):
     info = UE_MAP[ue_key]

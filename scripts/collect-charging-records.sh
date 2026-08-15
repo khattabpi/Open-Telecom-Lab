@@ -10,6 +10,10 @@
 
 set -euo pipefail
 
+if [ "${EUID}" -ne 0 ]; then
+    exec sudo bash "$0" "$@"
+fi
+
 BOLD='\033[1m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
