@@ -29,7 +29,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Run python engine
 python3 - "$@" << 'EOF'
-import socket, re, hashlib, time, threading, sys, os, subprocess
+import socket, re, hashlib, time, threading, sys, os, subprocess, json, urllib.request, urllib.error
 
 PCSCF_IP = "10.46.0.1"
 SIP_PORT = 5060
@@ -377,7 +377,7 @@ try:
     s.sendto(bye.encode(), ('{PCSCF_IP}', {SIP_PORT}))
     bye_resp, addr = s.recvfrom(4096)
     with open('/tmp/caller_res.txt', 'w') as f:
-        f.write(f'OK: Received {{rcv_count[0]}}/{NUM_PACKETS} RTP packets')
+        f.write(f'OK: Received {{rcv_count[0]}}/{NUM_PACKETS} RTP packets|call-run-{{call_seq}}@{caller_ip}')
 except Exception as e:
     with open('/tmp/caller_res.txt', 'w') as f:
         f.write(f'ERROR: {{e}}')
@@ -396,15 +396,88 @@ except Exception as e:
     caller_proc.wait(timeout=15.0)
     callee_proc.wait(timeout=15.0)
 
-    with open('/tmp/caller_res.txt') as f: c_res = f.read().strip()
+    with open('/tmp/caller_res.txt') as f: c_raw = f.read().strip()
     with open('/tmp/callee_res.txt') as f: k_res = f.read().strip()
+
+    call_id = f"call-{caller_key}-{callee_key}-{int(time.time())}@{caller_ip}"
+    if "|" in c_raw:
+        c_res, call_id = c_raw.split("|", 1)
+    else:
+        c_res = c_raw
+
     print(f"  Caller ({caller_key} -> {callee_key}): {c_res}")
     print(f"  Callee ({callee_key} -> {caller_key}): {k_res}")
     if not (c_res.startswith("OK") and k_res.startswith("OK")):
         print(f"  {RED}[✗] Voice call or media verification failed!{NC}")
         return False
     print(f"  {GREEN}[✓] Call dialog & Bidirectional RTP stream PASSED (25/25 packets, 0% loss){NC}")
+
+    # Invoke Erlang/OTP Telecom Charging Integration
+    process_charging_event(caller_key, callee_key, call_id, duration=10.0)
     return True
+
+def process_charging_event(caller_key, callee_key, call_id, duration=10.0):
+    # Determine target charging account and roaming context
+    # If UE3 is involved (either caller or callee in roaming scenarios), charge acc-ue3 with rate plan premium-roaming
+    if caller_key == "ue3" or callee_key == "ue3":
+        acc_id = "acc-ue3"
+        dest = "roaming_vplmn"
+        role_label = "UE3 Roaming (Bosnia 218/90, HPLMN 602/03)"
+    elif caller_key == "ue1":
+        acc_id = "acc-ue1"
+        dest = "domestic"
+        role_label = "UE1 Domestic (Egypt 602/03)"
+    elif caller_key == "ue2":
+        acc_id = "acc-ue2"
+        dest = "domestic"
+        role_label = "UE2 Domestic (Egypt 602/04)"
+    else:
+        acc_id = f"acc-{caller_key}"
+        dest = "domestic"
+        role_label = f"{caller_key.upper()} Domestic"
+
+    payload = {
+        "call_id": call_id,
+        "session_id": call_id,
+        "caller": f"sip:{caller_key}@ims.lab",
+        "callee": f"sip:{callee_key}@ims.lab",
+        "account_id": acc_id,
+        "service_type": "voice",
+        "duration": duration,
+        "destination": dest
+    }
+
+    import urllib.request, urllib.error
+    url = "http://127.0.0.1:8085/v1/charging/events"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            status = data.get("status")
+            tx_id = data.get("transaction_id", "N/A")
+            charge = data.get("total_charge", 0.0)
+            avail = data.get("available_balance", 0.0)
+            cons = data.get("consumed_balance", 0.0)
+            tariff = data.get("tariff_id", "N/A")
+            expl = data.get("explanation", "")
+            print(f"  {GREEN}[✓] Erlang/OTP Charging Engine ({acc_id} - {role_label}):{NC}")
+            print(f"      Status: {status} | Rated Charge: {charge:.4f} LAB ({tariff})")
+            print(f"      Balance Available: {avail:.4f} LAB | Consumed: {cons:.4f} LAB | Tx: {tx_id}")
+            if expl:
+                print(f"      Rating Breakdown: {expl}")
+            return True
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8")
+        print(f"  {RED}[✗] Erlang Charging HTTP {e.code}: {err_body}{NC}")
+        return False
+    except Exception as e:
+        print(f"  {YELLOW}[!] Erlang Charging Service offline on :8085 ({e}){NC}")
+        return False
 
 # Parse CLI arguments
 args = [arg.strip().lower() for arg in sys.argv[1:] if arg.strip()]

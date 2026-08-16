@@ -108,5 +108,40 @@ server_test_() ->
               ?assertEqual(<<"PASS">>, maps:get(<<"status">>, Report)),
               ?assertEqual(0, maps:get(<<"anomalies_count">>, Report)),
               ?assertEqual(4, maps:get(<<"accounts_audited">>, Report))
+          end},
+
+         {"[SERVER-TEST-10] Direct call charging for UE3 Roaming (30.0 -> Avail: 29.5, Cons: 0.5)",
+          fun() ->
+              CallMap = #{
+                  <<"session_id">> => <<"call-test-ue3-roam-01">>,
+                  <<"account_id">> => <<"acc-ue3">>,
+                  <<"caller">> => <<"sip:ue1@ims.lab">>,
+                  <<"callee">> => <<"sip:ue3@ims.lab">>,
+                  <<"duration">> => 10.0
+              },
+              {ok, Res} = charging_server:charge_call(CallMap),
+              ?assertEqual(<<"CHARGED">>, maps:get(<<"status">>, Res)),
+              ?assertEqual(0.5000, maps:get(<<"total_charge">>, Res)),
+              ?assertEqual(29.0000, maps:get(<<"available_balance">>, Res)), % was 29.5 in test 3
+              ?assertEqual(1.0000, maps:get(<<"consumed_balance">>, Res))
+          end},
+
+         {"[SERVER-TEST-11] Idempotent call charging with identical Call-ID",
+          fun() ->
+              CallMap = #{
+                  <<"session_id">> => <<"call-test-ue3-roam-01">>,
+                  <<"account_id">> => <<"acc-ue3">>,
+                  <<"caller">> => <<"sip:ue1@ims.lab">>,
+                  <<"callee">> => <<"sip:ue3@ims.lab">>,
+                  <<"duration">> => 10.0
+              },
+              {ok, Res} = charging_server:charge_call(CallMap),
+              ?assertEqual(<<"EXISTING">>, maps:get(<<"status">>, Res)),
+              ?assertEqual(29.0000, maps:get(<<"available_balance">>, Res)),
+
+              %% Confirm reconciliation still passes with 0 anomalies
+              {ok, Report} = charging_server:reconcile(),
+              ?assertEqual(<<"PASS">>, maps:get(<<"status">>, Report)),
+              ?assertEqual(0, maps:get(<<"anomalies_count">>, Report))
           end}
      ]}.

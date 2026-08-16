@@ -136,6 +136,42 @@ http_test_() ->
                   Json = jsx:decode(list_to_binary(Body), [return_maps]),
                   ?assertEqual(<<"PASS">>, maps:get(<<"status">>, Json)),
                   ?assertEqual(0, maps:get(<<"anomalies_count">>, Json))
+              end},
+
+             {"[HTTP-TEST-12] POST /v1/charging/events rates and debits call",
+              fun() ->
+                  ReqBody = jsx:encode(#{
+                      <<"account_id">> => <<"acc-ue3">>,
+                      <<"session_id">> => <<"http-call-event-01">>,
+                      <<"caller">> => <<"sip:ue1@ims.lab">>,
+                      <<"callee">> => <<"sip:ue3@ims.lab">>,
+                      <<"duration">> => 10.0,
+                      <<"service_type">> => <<"voice">>
+                  }),
+                  {ok, {{_, 200, _}, _, RespBody}} = httpc:request(post, 
+                      {BaseUrl ++ "/v1/charging/events", [{"content-type", "application/json"}], "application/json", binary_to_list(ReqBody)}, [], []),
+                  Json = jsx:decode(list_to_binary(RespBody), [return_maps]),
+                  ?assertEqual(<<"CHARGED">>, maps:get(<<"status">>, Json)),
+                  ?assertEqual(0.5000, maps:get(<<"total_charge">>, Json)),
+                  ?assertEqual(29.0000, maps:get(<<"available_balance">>, Json)),
+                  ?assertEqual(1.0000, maps:get(<<"consumed_balance">>, Json))
+              end},
+
+             {"[HTTP-TEST-13] POST /v1/charging/events idempotency check",
+              fun() ->
+                  ReqBody = jsx:encode(#{
+                      <<"account_id">> => <<"acc-ue3">>,
+                      <<"session_id">> => <<"http-call-event-01">>,
+                      <<"caller">> => <<"sip:ue1@ims.lab">>,
+                      <<"callee">> => <<"sip:ue3@ims.lab">>,
+                      <<"duration">> => 10.0,
+                      <<"service_type">> => <<"voice">>
+                  }),
+                  {ok, {{_, 200, _}, _, RespBody}} = httpc:request(post, 
+                      {BaseUrl ++ "/v1/charging/events", [{"content-type", "application/json"}], "application/json", binary_to_list(ReqBody)}, [], []),
+                  Json = jsx:decode(list_to_binary(RespBody), [return_maps]),
+                  ?assertEqual(<<"EXISTING">>, maps:get(<<"status">>, Json)),
+                  ?assertEqual(29.0000, maps:get(<<"available_balance">>, Json))
               end}
          ]
      end}.

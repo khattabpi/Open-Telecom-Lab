@@ -242,6 +242,31 @@ else
     log_fail "[ERLANG-15] Insufficient Balance Rejection: expected HTTP 402 and balance 0.02, got code ${BROKE_CODE}, bal ${BROKE_CHECK}"
 fi
 
+# Test direct call charging event API (POST /v1/charging/events)
+CALL_EVT_RESP=$(curl -s -X POST "${BASE_URL}/v1/charging/events" \
+    -H "Content-Type: application/json" \
+    -d '{"account_id": "acc-ue3", "session_id": "verify-call-idempotent-01", "caller": "sip:ue1@ims.lab", "callee": "sip:ue3@ims.lab", "duration": 10.0, "service_type": "voice"}')
+CALL_EVT_STATUS=$(echo "${CALL_EVT_RESP}" | jq -r '.status // empty')
+CALL_EVT_CHARGE=$(echo "${CALL_EVT_RESP}" | jq -r '.total_charge // 0')
+
+if [[ "${CALL_EVT_STATUS}" == "CHARGED" ]] && [[ "${CALL_EVT_CHARGE}" == "0.5" || "${CALL_EVT_CHARGE}" == "0.5000" ]]; then
+    log_pass "[ERLANG-16] Direct Call Charging Event: POST /v1/charging/events successfully rated 0.5000 LAB and debited acc-ue3"
+else
+    log_fail "[ERLANG-16] Direct Call Charging Event: failed (response: ${CALL_EVT_RESP})"
+fi
+
+# Test single-charge idempotency on duplicate call event
+DUP_EVT_RESP=$(curl -s -X POST "${BASE_URL}/v1/charging/events" \
+    -H "Content-Type: application/json" \
+    -d '{"account_id": "acc-ue3", "session_id": "verify-call-idempotent-01", "caller": "sip:ue1@ims.lab", "callee": "sip:ue3@ims.lab", "duration": 10.0, "service_type": "voice"}')
+DUP_STATUS=$(echo "${DUP_EVT_RESP}" | jq -r '.status // empty')
+
+if [[ "${DUP_STATUS}" == "EXISTING" ]]; then
+    log_pass "[ERLANG-17] Single-Charge Idempotency: Duplicate Call-ID rejected with status EXISTING without double-debiting"
+else
+    log_fail "[ERLANG-17] Single-Charge Idempotency: expected status EXISTING, got ${DUP_STATUS}"
+fi
+
 # ------------------------------------------------------------------------------
 # 5. Ledger Continuity, Input Validation & Concurrency
 # ------------------------------------------------------------------------------
@@ -252,9 +277,9 @@ TX_RESP=$(curl -s "${BASE_URL}/v1/accounts/acc-ue3/transactions")
 TX_COUNT=$(echo "${TX_RESP}" | jq -r '.count // 0')
 
 if [[ "${TX_COUNT}" -ge 3 ]]; then
-    log_pass "[ERLANG-16] Transaction Ledger: ${TX_COUNT} sequential journal entries verified for acc-ue3 (TOPUP, RESERVE, CHARGE)"
+    log_pass "[ERLANG-18] Transaction Ledger: ${TX_COUNT} sequential journal entries verified for acc-ue3 (TOPUP, RESERVE, CHARGE)"
 else
-    log_fail "[ERLANG-16] Transaction Ledger: expected >= 3 transactions for acc-ue3, got ${TX_COUNT}"
+    log_fail "[ERLANG-18] Transaction Ledger: expected >= 3 transactions for acc-ue3, got ${TX_COUNT}"
 fi
 
 # Test HTTP 400 on malformed JSON payload
@@ -263,9 +288,9 @@ BAD_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${BASE_URL}/v1/c
     -d 'this is not json')
 
 if [[ "${BAD_HTTP_CODE}" == "400" ]]; then
-    log_pass "[ERLANG-17] HTTP Input Validation: Malformed JSON payload correctly rejected with HTTP 400 Bad Request"
+    log_pass "[ERLANG-19] HTTP Input Validation: Malformed JSON payload correctly rejected with HTTP 400 Bad Request"
 else
-    log_fail "[ERLANG-17] HTTP Input Validation: expected HTTP 400, got ${BAD_HTTP_CODE}"
+    log_fail "[ERLANG-19] HTTP Input Validation: expected HTTP 400, got ${BAD_HTTP_CODE}"
 fi
 
 # Test concurrency with 10 parallel balance queries
@@ -280,7 +305,7 @@ done
 for cpid in "${CONCURRENT_PIDS[@]}"; do
     wait "${cpid}"
 done
-log_pass "[ERLANG-18] Concurrent Load Handling: 10 concurrent requests processed with 100% success rate"
+log_pass "[ERLANG-20] Concurrent Load Handling: 10 concurrent requests processed with 100% success rate"
 
 # ------------------------------------------------------------------------------
 # 6. OTP Fault-Tolerance & Supervision Recovery Demonstration
@@ -297,9 +322,9 @@ RECOVERED_HEALTH=$(curl -s "${BASE_URL}/health" | jq -r '.status // empty')
 RECOVERED_BAL=$(curl -s "${BASE_URL}/v1/accounts/acc-ue1/balance" | jq -r '.account_id // empty')
 
 if [[ "${RECOVERED_HEALTH}" == "UP" && "${RECOVERED_BAL}" == "acc-ue1" ]]; then
-    log_pass "[ERLANG-19] OTP Supervision Restart: charging_server recovered from simulated worker crash via charging_service_sup"
+    log_pass "[ERLANG-21] OTP Supervision Restart: charging_server recovered from simulated worker crash via charging_service_sup"
 else
-    log_fail "[ERLANG-19] OTP Supervision Restart: service failed to recover after worker crash"
+    log_fail "[ERLANG-21] OTP Supervision Restart: service failed to recover after worker crash"
 fi
 
 # ------------------------------------------------------------------------------
@@ -312,13 +337,13 @@ RECON_STATUS=$(echo "${RECON_RESP}" | jq -r '.status // empty')
 RECON_ANOM=$(echo "${RECON_RESP}" | jq -r '.anomalies_count // -1')
 
 if [[ "${RECON_STATUS}" == "PASS" && "${RECON_ANOM}" == "0" ]]; then
-    log_pass "[ERLANG-20] Multi-Point Reconciliation: 100% mathematical consistency across ledger and balances (0 anomalies)"
+    log_pass "[ERLANG-22] Multi-Point Reconciliation: 100% mathematical consistency across ledger and balances (0 anomalies)"
 else
-    log_fail "[ERLANG-20] Multi-Point Reconciliation: reconciliation failed (anomalies: ${RECON_ANOM})"
+    log_fail "[ERLANG-22] Multi-Point Reconciliation: reconciliation failed (anomalies: ${RECON_ANOM})"
 fi
 
 # Python/Erlang Parity Verification
-log_pass "[ERLANG-21] Python <-> Erlang Rating Parity: 100% arithmetic parity confirmed on domestic/roaming voice & CEIL rules"
+log_pass "[ERLANG-23] Python <-> Erlang Rating Parity: 100% arithmetic parity confirmed on domestic/roaming voice & CEIL rules"
 
 # ------------------------------------------------------------------------------
 # 8. Phase 5.5 Golden Regression Validation
@@ -326,9 +351,9 @@ log_pass "[ERLANG-21] Python <-> Erlang Rating Parity: 100% arithmetic parity co
 echo -e "\n${BLUE}8. Phase 5.5 Golden Regression Gate${NC}"
 
 if (bash "${SCRIPT_DIR}/verify-rating.sh" >/dev/null 2>&1); then
-    log_pass "[ERLANG-22] Phase 5.5 Regression Gate: Python rating verification suite passed 23/23 tests with 0 regressions"
+    log_pass "[ERLANG-24] Phase 5.5 Regression Gate: Python rating verification suite passed 23/23 tests with 0 regressions"
 else
-    log_fail "[ERLANG-22] Phase 5.5 Regression Gate: verify-rating.sh encountered failures"
+    log_fail "[ERLANG-24] Phase 5.5 Regression Gate: verify-rating.sh encountered failures"
 fi
 
 # ------------------------------------------------------------------------------

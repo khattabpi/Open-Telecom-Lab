@@ -195,6 +195,15 @@ handle_request(<<"POST">>, <<"/v1/charging/refund">>, Req0) ->
     end);
 
 %%--------------------------------------------------------------------
+%% POST /v1/charging/events
+%% POST /v1/charging/call
+%%--------------------------------------------------------------------
+handle_request(<<"POST">>, <<"/v1/charging/events">>, Req0) ->
+    handle_charge_call_request(Req0);
+handle_request(<<"POST">>, <<"/v1/charging/call">>, Req0) ->
+    handle_charge_call_request(Req0);
+
+%%--------------------------------------------------------------------
 %% POST /v1/accounts/:account_id/topup
 %%--------------------------------------------------------------------
 handle_request(<<"POST">>, <<"/v1/accounts/", Rest/binary>>, Req0) ->
@@ -237,6 +246,22 @@ handle_request(_Method, _Path, Req) ->
 %%--------------------------------------------------------------------
 %% Helper Functions
 %%--------------------------------------------------------------------
+handle_charge_call_request(Req0) ->
+    with_json_body(Req0, fun(Body, Req) ->
+        case charging_server:charge_call(Body) of
+            {ok, Result} ->
+                reply_json(200, Result, Req);
+            {error, insufficient_balance} ->
+                reply_error(402, <<"Insufficient balance for call charging">>, Req);
+            {error, account_not_found} ->
+                reply_error(404, <<"Account not found">>, Req);
+            {error, missing_session_id} ->
+                reply_error(400, <<"Missing required field: session_id or call_id">>, Req);
+            {error, Reason} ->
+                reply_error(400, iolist_to_binary(io_lib:format("Call charging failed: ~p", [Reason])), Req)
+        end
+    end).
+
 with_json_body(Req0, Fun) ->
     case cowboy_req:has_body(Req0) of
         false ->
