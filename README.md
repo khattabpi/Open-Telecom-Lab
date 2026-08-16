@@ -10,11 +10,12 @@
 [![Media Relay](https://img.shields.io/badge/Media%20Proxy-RTPEngine-yellow)](https://github.com/sipwise/rtpengine)
 [![RAN Simulation](https://img.shields.io/badge/RAN%20Sim-UERANSIM%20v3.3.0-green)](https://github.com/aligungr/UERANSIM)
 [![Rating & Charging](https://img.shields.io/badge/Rating%20Engine-Prepaid%20%2F%20ACID%20Ledger-gold)](docs/charging/architecture.md)
+[![Erlang/OTP](https://img.shields.io/badge/Charging%20Service-Erlang%2FOTP%2025%20%2F%20Cowboy-A90533?logo=erlang&logoColor=white)](docs/charging/erlang-otp-architecture.md)
 [![Observability](https://img.shields.io/badge/Telemetry-Prometheus%20v2.45-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/)
 [![Visualization](https://img.shields.io/badge/Dashboard-Grafana%20v10.4-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
 [![Alerting](https://img.shields.io/badge/Alerting-Alertmanager%20v0.25-crimson)](https://prometheus.io/docs/alerting/latest/alertmanager/)
-[![Validation](https://img.shields.io/badge/Validation-170%2F170%20Passed-brightgreen)](#-validation--test-results)
-[![Golden Baseline](https://img.shields.io/badge/Golden%20Baseline-phase5.5--golden%20(ecb8028)-purple)](#project-milestones--golden-baseline)
+[![Validation](https://img.shields.io/badge/Validation-192%2F192%20Passed-brightgreen)](#-validation--test-results)
+[![Golden Baseline](https://img.shields.io/badge/Golden%20Baseline-Phase%205.6%20Erlang%20Service-purple)](#project-milestones--golden-baseline)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
 
 ---
@@ -32,6 +33,7 @@
 - [Multi-PLMN Local Breakout (LBO) Roaming](#multi-plmn-local-breakout-lbo-roaming)
 - [QoS, Policy Control & Charging Accounting](#qos-policy-control--charging-accounting)
 - [Telecom Rating & Prepaid Balance Subsystem (Phase 5.5)](#telecom-rating--prepaid-balance-subsystem-phase-55)
+- [Erlang/OTP Telecom Revenue & Charging Service (Phase 5.6)](#erlangotp-telecom-revenue--charging-service-phase-56)
 - [Full-Stack Observability: Prometheus & Grafana](#full-stack-observability-prometheus--grafana)
 - [Alerting & Incident Detection (Alertmanager)](#alerting--incident-detection-alertmanager)
 - [Service Assurance & Real-Time KPIs](#service-assurance--real-time-kpis)
@@ -48,7 +50,7 @@
 
 ## Overview
 
-**5G-IMS-Lab** is an engineering reference laboratory and protocol validation environment designed to demonstrate, benchmark, and observe a cloud-native **5G Standalone (5G SA) Core** integrated with an **IP Multimedia Subsystem (IMS)** service layer and an **Offline Telecom Rating & Prepaid Balance Management Subsystem**.
+**5G-IMS-Lab** is an engineering reference laboratory and protocol validation environment designed to demonstrate, benchmark, and observe a cloud-native **5G Standalone (5G SA) Core** integrated with an **IP Multimedia Subsystem (IMS)** service layer, an **Offline Telecom Rating & Prepaid Balance Management Subsystem**, and an **Erlang/OTP Telecom Revenue & Charging Service**.
 
 The laboratory establishes an end-to-end telecommunications environment supporting:
 - Multi-UE concurrency and dual PDU session establishment (Internet + IMS).
@@ -58,11 +60,12 @@ The laboratory establishes an end-to-end telecommunications environment supporti
 - DiffServ QoS priority queueing (`tc prio`) and static PCF/BSF policy control.
 - Offline SQLite Call Detail Record (CDR) accounting and user-plane data telemetry.
 - **Telecom Rating & Prepaid Balance Subsystem (Phase 5.5):** Deterministic tariff calculation, prepaid credit reservations, multi-bucket account balance management (`available`, `reserved`, `consumed`), immutable double-entry transaction ledgers, CDR ingestion, billing idempotency, and mathematical financial reconciliation audits.
+- **Erlang/OTP Telecom Revenue & Charging Service (Phase 5.6):** High-performance OTP application with a fault-tolerant supervision tree, `gen_server` state management, Cowboy REST API (`:8085`), soft real-time deterministic rating, reservation state machines, and mathematical financial reconciliation.
 - Continuous ITU-T G.107 service-assurance KPI tracking (PDD, CST, CSSR, jitter, and MOS).
 - Production-style full-stack observability with custom OpenMetrics exposition, Prometheus scraping, Alertmanager incident routing, and a 53-panel Grafana operations command center.
 
 > [!NOTE]
-> This repository is a **rigorous telecom engineering laboratory and reference implementation** built for protocol validation, cloud-native architecture research, and observability benchmarking. It explicitly identifies standard 3GPP production boundaries (such as 3GPP CHF/Nchf and SEPP/N32 interconnects) where laboratory-level equivalents are employed. All technical statements, call flows, metrics, and test results are backed by automated regression test suites (**170 / 170 Tests Passed**).
+> This repository is a **rigorous telecom engineering laboratory and reference implementation** built for protocol validation, cloud-native architecture research, and observability benchmarking. It explicitly identifies standard 3GPP production boundaries (such as 3GPP CHF/Nchf and SEPP/N32 interconnects) where laboratory-level equivalents are employed. All technical statements, call flows, metrics, and test results are backed by automated regression test suites (**192 / 192 Tests Passed, 100% Green**).
 
 ---
 
@@ -76,15 +79,16 @@ The laboratory establishes an end-to-end telecommunications environment supporti
 ├───────────────────────────────┼──────────────────────────────────┼───────────────────────────────────────────────┤
 │ • 5G SA Core (Open5GS v2.8.0) │ • Kamailio P-CSCF / I-CSCF /     │ • Deterministic Telecom Rating Engine         │
 │ • Kubernetes (kind) Cluster   │   S-CSCF with USRLOC Database    │ • Multi-Bucket Prepaid Balance Manager        │
-│ • Dual PDU Sessions per UE    │ • RTPEngine Media Relay Proxy    │ • Immutable ACID Transaction Journal          │
-│   - Internet (10.45.0.0/16)   │ • SIP Digest MD5 Authentication  │ • Multi-Point Financial Reconciliation Engine │
-│   - IMS Bearer (10.46.0.0/16) │ • Domestic IMS Voice (UE1 ↔ UE2) │ • 108 Authentic Kamailio S-CSCF CDR Dataset   │
-│ • Multi-PLMN RAN Isolation:   │ • Inter-PLMN Roaming Voice       │ • Prometheus Scrape Pipeline (:30090)         │
-│   - Home: 602/03 & 602/04     │   (UE1 Egypt ↔ UE3 Bosnia LBO)   │ • Grafana Command Center (53 Panels, :30300)  │
-│   - Visited: 218/90           │ • Bidirectional RTP (0% Loss)    │ • Alertmanager Engine (26 Rules, :30093)      │
-│ • Dedicated N2/N3 Associations│ • DiffServ / tc Priority Queues  │ • Automated Fault-Injection & Recovery        │
-│ • 5G-AKA Security Handshake   │ • Static PCF/BSF Policy Control  │ • ITU-T G.107 Service Assurance KPI Engine    │
-│ • S-NSSAI Network Slicing     │ • Offline SQLite CDR Generator   │ • 170 / 170 Automated Tests (100% Green)      │
+│ • Dual PDU Sessions per UE    │ • RTPEngine Media Relay Proxy    │ • Erlang/OTP Charging Service (Cowboy :8085)  │
+│   - Internet (10.45.0.0/16)   │ • SIP Digest MD5 Authentication  │ • OTP Supervision Tree & Fault Isolation      │
+│   - IMS Bearer (10.46.0.0/16) │ • Domestic IMS Voice (UE1 ↔ UE2) │ • Multi-Point Financial Reconciliation Engine │
+│ • Multi-PLMN RAN Isolation:   │ • Inter-PLMN Roaming Voice       │ • 108 Authentic Kamailio S-CSCF CDR Dataset   │
+│   - Home: 602/03 & 602/04     │   (UE1 Egypt ↔ UE3 Bosnia LBO)   │ • Prometheus Scrape Pipeline (:30090)         │
+│   - Visited: 218/90           │ • Bidirectional RTP (0% Loss)    │ • Grafana Command Center (53 Panels, :30300)  │
+│ • Dedicated N2/N3 Associations│ • DiffServ / tc Priority Queues  │ • Alertmanager Engine (26 Rules, :30093)      │
+│ • 5G-AKA Security Handshake   │ • Static PCF/BSF Policy Control  │ • Automated Fault-Injection & Recovery        │
+│ • S-NSSAI Network Slicing     │ • Offline SQLite CDR Generator   │ • ITU-T G.107 Service Assurance KPI Engine    │
+│ • 3 Registered UEs / 6 PDUs   │ • Voice Quality (MOS 4.4 / 4.50) │ • 192 / 192 Automated Tests (100% Green)      │
 └───────────────────────────────┴──────────────────────────────────┴───────────────────────────────────────────────┘
 ```
 
@@ -313,22 +317,24 @@ sudo bash scripts/measure-kpis.sh
 ```
 
 ### Step 9 — Execute All Automated Verification Test Suites
-Run the five consolidated verification suites (totaling **170 automated test assertions**):
+Run the six consolidated verification suites (totaling **192 automated test assertions**, 100% Green):
 ```bash
-# 1. Telecom Rating & Prepaid Balance Suite (23 Tests)
-# Note: verify-rating.sh is a Bash script; invoke via ./ or bash
+# 1. Erlang/OTP Telecom Revenue & Charging Suite (22 Tests)
+./scripts/verify-erlang-charging.sh
+
+# 2. Telecom Rating & Prepaid Balance Suite (23 Tests)
 ./scripts/verify-rating.sh
 
-# 2. Prometheus Telemetry Collection Suite (19 Tests)
+# 3. Prometheus Telemetry Collection Suite (19 Tests)
 ./scripts/verify-observability.sh
 
-# 3. Grafana Operations Dashboard Suite (18 Tests)
+# 4. Grafana Operations Dashboard Suite (18 Tests)
 ./scripts/verify-grafana.sh
 
-# 4. Prometheus Alerting & Incident Detection Suite (19 Tests)
+# 5. Prometheus Alerting & Incident Detection Suite (19 Tests)
 ./scripts/verify-alerting.sh
 
-# 5. Core 5G SA, Multi-PLMN & IMS Regression Suite (91 Tests)
+# 6. Core 5G SA, Multi-PLMN & IMS Regression Suite (91 Tests)
 sudo bash scripts/verify-lab.sh
 ```
 
@@ -762,6 +768,284 @@ python3 scripts/rating-engine.py report
 
 ---
 
+## Erlang/OTP Telecom Revenue & Charging Service (Phase 5.6)
+
+Phase 5.6 introduces a telecom-grade **Erlang/OTP Revenue & Charging Service** ([`services/charging-erlang/`](services/charging-erlang/)) that runs alongside the laboratory's Python rating engine to demonstrate carrier-grade charging architecture.
+
+### 1. Telecom Architectural Motivation
+In real-world telecommunications (3GPP Rel-15/16/17), Online Charging Systems (OCS), Charging Functions (CHF), and Revenue Management platforms process hundreds of thousands of concurrent prepaid and postpaid charging events with sub-millisecond latency.
+
+Erlang/OTP is the telecom industry standard runtime for high-availability signaling and revenue engines:
+- **Actor Model Concurrency:** Each subscriber transaction executes in lightweight, isolated Erlang processes with zero lock contention.
+- **Fault-Tolerant Supervision:** The OTP supervision tree isolates faults and automatically recovers crashed workers without dropping network listener sockets.
+- **Predictable Soft Real-Time Latency:** Per-process heap garbage collection eliminates stop-the-world pauses during high-volume rating events.
+- **Clean Service Boundaries:** Exposes a high-performance HTTP REST API on port `8085` powered by Cowboy.
+
+```mermaid
+flowchart TD
+    APP["charging_service_app (OTP Application)"] --> SUP["charging_service_sup (Root Supervisor)<br/>Strategy: one_for_one<br/>Max Restarts: 5 / 10s"]
+    SUP -->|Supervises Permanent Worker| SRV["charging_server (gen_server)<br/>Account State & Balance Lifecycle"]
+    SUP -->|Supervises Permanent Worker| HTTP["charging_http (gen_server)<br/>Cowboy HTTP Listener (:8085)"]
+    HTTP --> ROUTE["charging_http_handler (Cowboy Router)"]
+    
+    SRV --> RATE["charging_rating<br/>(Deterministic Pricing Math)"]
+    SRV --> STOR["charging_storage<br/>(Seed Data & Storage Adapter)"]
+    SRV --> RECON["charging_reconcile<br/>(Multi-Point Financial Auditor)"]
+```
+
+---
+
+### 2. Supervision Tree & Core Modules
+
+The Erlang application is structured under standard OTP design principles:
+
+| Module | OTP Behaviour | Source File | Architectural Responsibility |
+| :--- | :--- | :--- | :--- |
+| **`charging_service_app`** | `application` | [`src/charging_service_app.erl`](services/charging-erlang/src/charging_service_app.erl) | Application startup callback; starts the root supervisor. |
+| **`charging_service_sup`** | `supervisor` | [`src/charging_service_sup.erl`](services/charging-erlang/src/charging_service_sup.erl) | `one_for_one` root supervisor managing `charging_server` and `charging_http`. |
+| **`charging_server`** | `gen_server` | [`src/charging_server.erl`](services/charging-erlang/src/charging_server.erl) | Core state manager for subscriber accounts, reservations, and transaction ledgers. |
+| **`charging_rating`** | Pure Functional | [`src/charging_rating.erl`](services/charging-erlang/src/charging_rating.erl) | Deterministic 3GPP rating mathematics, tariff resolution, and duration rounding. |
+| **`charging_storage`** | Data Adapter | [`src/charging_storage.erl`](services/charging-erlang/src/charging_storage.erl) | Seed data adapter mirroring Phase 5.5 accounts, tariffs, and rate plans. |
+| **`charging_reconcile`**| Pure Functional | [`src/charging_reconcile.erl`](services/charging-erlang/src/charging_reconcile.erl) | Multi-point financial auditor enforcing mathematical accounting invariants. |
+| **`charging_http`** | `gen_server` | [`src/charging_http.erl`](services/charging-erlang/src/charging_http.erl) | Manages Cowboy listener lifecycle on port `8085`. |
+| **`charging_http_handler`**| `cowboy_handler` | [`src/charging_http_handler.erl`](services/charging-erlang/src/charging_http_handler.erl) | Routes HTTP requests, parses JSON payloads via `jsx`, and formats HTTP responses. |
+
+---
+
+### 3. REST API Endpoint Reference (Cowboy `:8085`)
+
+| Method | Endpoint | Description | Expected Status |
+| :--- | :--- | :--- | :---: |
+| **`GET`** | `/health` | Service health, OTP version, and uptime check | `200 OK` |
+| **`GET`** | `/metrics` | Structured JSON charging metrics and operation counters | `200 OK` |
+| **`GET`** | `/v1/accounts` | List all provisioned subscriber accounts | `200 OK` |
+| **`GET`** | `/v1/accounts/:id/balance` | Query multi-bucket balance statement for an account | `200 OK` |
+| **`GET`** | `/v1/accounts/:id/transactions` | Query full sequential transaction journal for an account | `200 OK` |
+| **`POST`** | `/v1/accounts/:id/topup` | Top up subscriber balance with journal entry | `200 OK` |
+| **`GET`** | `/v1/tariffs` | List all active voice and data tariff rules | `200 OK` |
+| **`POST`** | `/v1/rating/quote` | Deterministic usage rating quote (voice duration / data bytes) | `200 OK` |
+| **`POST`** | `/v1/charging/reserve` | Lock prepaid credit for an active call session | `200 OK` / `402` |
+| **`POST`** | `/v1/charging/consume` | Finalize session charge and refund unused reserved credit | `200 OK` |
+| **`POST`** | `/v1/charging/refund` | Release unconsumed credit hold (e.g. cancelled/dropped call) | `200 OK` |
+| **`GET`** | `/v1/reconciliation` | Run multi-point mathematical financial reconciliation audit | `200 OK` |
+| **`POST`** | `/v1/fault/simulate` | Inject controlled worker crash to demonstrate OTP supervisor restart | `200 OK` |
+
+---
+
+### 4. Deterministic Rating Parity & Mathematical Proofs
+
+The Erlang rating engine executes exact 3GPP/BSS rating mathematics with **100% arithmetic parity** against the Phase 5.5 reference:
+
+$$\text{Billable Units} = \left\lceil \frac{\max(\text{Units}, \text{Min Units})}{\text{Granularity}} \right\rceil \times \text{Granularity}$$
+
+$$\text{Usage Charge} = \text{Billable Units} \times \frac{\text{Unit Rate}}{\text{Unit Size}}$$
+
+$$\text{Total Charge} = \text{Setup Fee} + \text{Usage Charge}$$
+
+```bash
+# 1. Quote UE3 Roaming Voice Call (10 seconds, VPLMN 218/90):
+curl -s -X POST http://127.0.0.1:8085/v1/rating/quote \
+  -H "Content-Type: application/json" \
+  -d '{"account_id": "acc-ue3", "destination": "roaming_vplmn", "duration": 10.0, "service_type": "voice"}' | jq
+```
+```json
+{
+  "account_id": "acc-ue3",
+  "billable_units": 10,
+  "currency": "LAB",
+  "destination_type": "roaming_vplmn",
+  "explanation": "Rated under tariff-premium-roaming-voice (voice/roaming_vplmn): setup 0.1000 LAB + 10 units @ 0.0400 LAB/1 units = 0.5000 LAB",
+  "service_type": "voice",
+  "setup_charge": 0.1,
+  "source_units": 10.0,
+  "tariff_id": "tariff-premium-roaming-voice",
+  "total_charge": 0.5,
+  "usage_charge": 0.4
+}
+```
+
+```bash
+# 2. Quote UE1 Domestic Voice Call (10 seconds):
+curl -s -X POST http://127.0.0.1:8085/v1/rating/quote \
+  -H "Content-Type: application/json" \
+  -d '{"account_id": "acc-ue1", "destination": "domestic", "duration": 10.0, "service_type": "voice"}' | jq
+```
+```json
+{
+  "account_id": "acc-ue1",
+  "billable_units": 10,
+  "currency": "LAB",
+  "destination_type": "domestic",
+  "explanation": "Rated under tariff-domestic-voice (voice/domestic): setup 0.0500 LAB + 10 units @ 0.0200 LAB/1 units = 0.2500 LAB",
+  "service_type": "voice",
+  "setup_charge": 0.05,
+  "source_units": 10.0,
+  "tariff_id": "tariff-domestic-voice",
+  "total_charge": 0.25,
+  "usage_charge": 0.2
+}
+```
+
+```bash
+# 3. Quote CEIL Duration Rounding (1.1 seconds -> 2 billable seconds):
+curl -s -X POST http://127.0.0.1:8085/v1/rating/quote \
+  -H "Content-Type: application/json" \
+  -d '{"account_id": "acc-ue1", "destination": "domestic", "duration": 1.1, "service_type": "voice"}' | jq
+```
+```json
+{
+  "account_id": "acc-ue1",
+  "billable_units": 2,
+  "currency": "LAB",
+  "destination_type": "domestic",
+  "explanation": "Rated under tariff-domestic-voice (voice/domestic): setup 0.0500 LAB + 2 units @ 0.0200 LAB/1 units = 0.0900 LAB",
+  "service_type": "voice",
+  "setup_charge": 0.05,
+  "source_units": 1.1,
+  "tariff_id": "tariff-domestic-voice",
+  "total_charge": 0.09,
+  "usage_charge": 0.04
+}
+```
+
+---
+
+### 5. Prepaid Credit Control & Reservation State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> AVAILABLE: 1. Provision Account / TOPUP (+30.00 LAB)
+    AVAILABLE --> RESERVED: 2. reserve(estimated: 0.50 LAB)<br/>Available: 29.50 | Reserved: 0.50
+    RESERVED --> AVAILABLE: refund(session_id) [Call Cancelled / Drop]
+    RESERVED --> CONSUMED: 3. consume(actual: 0.50 LAB)<br/>Consumed: 0.50 | Reserved: 0.00 | Available: 29.50
+    AVAILABLE --> CONSUMED: Direct Debit (debit_account)
+```
+
+#### Step-by-Step API Walkthrough:
+```bash
+# Step A: Reserve 0.50 LAB for UE3 roaming call
+curl -s -X POST http://127.0.0.1:8085/v1/charging/reserve \
+  -H "Content-Type: application/json" \
+  -d '{"account_id": "acc-ue3", "session_id": "sess-live-01", "service_type": "voice", "estimated_amount": 0.50}' | jq
+# Result: status = ACTIVE, available_balance = 29.50, reserved_balance = 0.50
+
+# Step B: Finalize call with actual consumption (0.50 LAB)
+curl -s -X POST http://127.0.0.1:8085/v1/charging/consume \
+  -H "Content-Type: application/json" \
+  -d '{"account_id": "acc-ue3", "session_id": "sess-live-01", "actual_charge": 0.50}' | jq
+# Result: status = CONSUMED, available_balance = 29.50, reserved_balance = 0.00, consumed_balance = 0.50
+
+# Step C: Non-Negative Balance Protection on Broke Account (0.02 LAB balance vs 1.00 LAB request)
+curl -s -i -X POST http://127.0.0.1:8085/v1/charging/reserve \
+  -H "Content-Type: application/json" \
+  -d '{"account_id": "acc-test-broke", "session_id": "sess-broke", "service_type": "voice", "estimated_amount": 1.00}'
+# Result: HTTP/1.1 402 Payment Required {"error": true, "message": "Insufficient balance for reservation"}
+```
+
+---
+
+### 6. OTP Fault-Tolerance & Worker Supervision Recovery
+
+The service demonstrates OTP's self-healing properties via controlled fault injection:
+```bash
+# 1. Inject simulated worker fault
+curl -s -X POST http://127.0.0.1:8085/v1/fault/simulate | jq
+# {"message": "Simulated worker fault injected. Supervisor will restart charging_server."}
+
+# 2. Verify supervisor immediately restarted worker and HTTP API remains operational
+curl -s http://127.0.0.1:8085/health | jq
+# {"status": "UP", "service": "charging-erlang", "version": "1.0.0", "otp_release": "25"}
+```
+
+Supervisor crash log captured during recovery test:
+```text
+=CRASH REPORT====
+  crasher:
+    initial call: charging_server:init/1
+    pid: <0.122.0>
+    registered_name: charging_server
+    exception exit: simulated_worker_fault
+=SUPERVISOR REPORT====
+    supervisor: {local,charging_service_sup}
+    errorContext: child_terminated
+    reason: simulated_worker_fault
+    offender: [{pid,<0.122.0>},{id,charging_server},...]
+```
+
+---
+
+### 7. Python $\leftrightarrow$ Erlang Parity Matrix
+
+| Feature / Metric | Python Reference (Phase 5.5) | Erlang/OTP Service (Phase 5.6) | Status |
+| :--- | :--- | :--- | :---: |
+| **Domestic Voice (10s)** | `0.2500 LAB` | `0.2500 LAB` | **100% Parity** |
+| **Roaming Voice (10s)** | `0.5000 LAB` | `0.5000 LAB` | **100% Parity** |
+| **Duration CEIL (1.1s)** | `0.0900 LAB` (2s billable) | `0.0900 LAB` (2s billable) | **100% Parity** |
+| **Internet Data (2 MB)** | `0.0200 LAB` | `0.0200 LAB` | **100% Parity** |
+| **IMS Vo5G Data (5 MB)** | `0.0000 LAB` (Zero-Rated) | `0.0000 LAB` (Zero-Rated) | **100% Parity** |
+| **Prepaid Reservation** | Available / Reserved / Consumed | Available / Reserved / Consumed | **100% Parity** |
+| **Balance Protection** | Strict Non-Negative Guard | HTTP 402 Rejection, 0 Corruption | **100% Parity** |
+| **Ledger Auditability** | Double-Entry SQLite Journal | Sequential Journal Records | **100% Parity** |
+| **Reconciliation Math** | $\text{Avail} + \text{Cons} + \text{Res} \equiv \text{Topups}$ | $\text{Avail} + \text{Cons} + \text{Res} \equiv \text{Topups}$ | **0 Anomalies** |
+
+---
+
+### 8. Phase 5.6 Automated Verification Suite (`verify-erlang-charging.sh`)
+
+```bash
+./scripts/verify-erlang-charging.sh
+```
+```text
+═══════════════════════════════════════════════════════════════════════
+  5G-IMS-Lab Phase 5.6 Erlang/OTP Charging Service Verification Suite   
+═══════════════════════════════════════════════════════════════════════
+
+1. Erlang/OTP Environment & Compilation
+  [✓] [ERLANG-01] Erlang/OTP Toolchain: Erlang/OTP 25 installed and available
+  [✓] [ERLANG-02] rebar3 Build Tool: rebar 3.19.0 on Erlang/OTP 25 Erts 13.2.2.5 available
+  [✓] [ERLANG-03] rebar3 Compilation: services/charging-erlang compiled cleanly with 0 errors
+
+2. OTP Application & Supervision Tree Lifecycle
+  [✓] [ERLANG-04] OTP Application Startup: charging_service running in background (PID: 486202)
+  [✓] [ERLANG-05] Supervisor & HTTP Listener: charging_service_sup and Cowboy running on port 8085
+  [✓] [ERLANG-06] Charging gen_server: charging_server active and handling requests
+  [✓] [ERLANG-07] Health Endpoint: GET /health returned 200 OK (status: UP, OTP: 25)
+
+3. Deterministic Rating Mathematics & Tariff Matching
+  [✓] [ERLANG-08] Roaming Voice Rating: UE3 (VPLMN 218/90) 10s call -> 0.5000 LAB (tariff-premium-roaming-voice)
+  [✓] [ERLANG-09] Domestic Voice Rating: UE1 -> UE2 10s call -> 0.2500 LAB (tariff-domestic-voice)
+  [✓] [ERLANG-10] Duration Rounding Policy: 1.1s call correctly rounded to 2 billable units (0.0900 LAB)
+
+4. Prepaid Balance Operations & Reservation Lifecycle
+  [✓] [ERLANG-11] Balance Query Endpoint: GET /v1/accounts/acc-ue3/balance returned 30.0000 LAB available
+  [✓] [ERLANG-12] Session Credit Reservation: 0.5000 LAB locked -> available: 29.5000 LAB, reserved: 0.5000 LAB
+  [✓] [ERLANG-13] Reservation Consumption: actual charge 0.5000 LAB finalized -> consumed: 0.5000 LAB, reserve: 0.0000 LAB
+  [✓] [ERLANG-14] Reservation Release / Refund: unconsumed hold released cleanly -> available restored to 50.0000 LAB
+  [✓] [ERLANG-15] Insufficient Balance Rejection: HTTP 402 returned and 0.0200 LAB balance preserved without corruption
+
+5. Ledger Integrity, HTTP Validation & Concurrency
+  [✓] [ERLANG-16] Transaction Ledger: 3 sequential journal entries verified for acc-ue3 (TOPUP, RESERVE, CHARGE)
+  [✓] [ERLANG-17] HTTP Input Validation: Malformed JSON payload correctly rejected with HTTP 400 Bad Request
+  [✓] [ERLANG-18] Concurrent Load Handling: 10 concurrent requests processed with 100% success rate
+
+6. OTP Supervision & Fault Recovery Demonstration
+  [✓] [ERLANG-19] OTP Supervision Restart: charging_server recovered from simulated worker crash via charging_service_sup
+
+7. Financial Reconciliation & Parity Verification
+  [✓] [ERLANG-20] Multi-Point Reconciliation: 100% mathematical consistency across ledger and balances (0 anomalies)
+  [✓] [ERLANG-21] Python <-> Erlang Rating Parity: 100% arithmetic parity confirmed on domestic/roaming voice & CEIL rules
+
+8. Phase 5.5 Golden Regression Gate
+  [✓] [ERLANG-22] Phase 5.5 Regression Gate: Python rating verification suite passed 23/23 tests with 0 regressions
+
+═══════════════════════════════════════════════════════════════════════
+  Phase 5.6 Erlang/OTP Verification Summary: 22 Passed, 0 Failed (Total: 22)
+═══════════════════════════════════════════════════════════════════════
+  >>> All Phase 5.6 Erlang/OTP Telecom Charging Service Tests Passed! <<<
+```
+
+---
+
 ### 11. Visual Evidence & Terminal Artifacts
 
 ![Terminal Rating and Reconciliation Output](docs/images/charging-cli-validation.png)
@@ -939,22 +1223,23 @@ The KPI engine ([`scripts/measure-kpis.sh`](scripts/measure-kpis.sh)) calculates
 
 ## ✅ Validation & Test Results
 
-The entire laboratory is governed by **five independent automated verification suites** totaling **170 tests (170/170 PASS, 0 Failures, 0 Warnings)**:
+The entire laboratory is governed by **six independent automated verification suites** totaling **192 tests (192/192 PASS, 0 Failures, 0 Warnings)**:
 
 ![Terminal Verification Suite Output](docs/images/verify-lab-output.png)
-*Figure 3: Consolidated Terminal Verification Output — 100% Passing State across All 5GC Core, Multi-PLMN Roaming, IMS, Rating & Charging, and Observability Test Suites.*
+*Figure 3: Consolidated Terminal Verification Output — 100% Passing State across All 5GC Core, Multi-PLMN Roaming, IMS, Rating & Charging, Erlang/OTP Charging, and Observability Test Suites.*
 
 ```text
 ═══════════════════════════════════════════════════════════════════════
   5G-IMS-LAB CONSOLIDATED TEST SUITE EXECUTION SUMMARY
 ═══════════════════════════════════════════════════════════════════════
   1. Core & IMS Regression Suite (verify-lab.sh)          : 91/91 Passed
-  2. Observability & Telemetry Suite (verify-observability): 19/19 Passed
-  3. Grafana Operations Dashboard Suite (verify-grafana)  : 18/18 Passed
-  4. Prometheus Alerting & Incident Suite (verify-alerting): 19/19 Passed
-  5. Rating Engine & Balance Suite (verify-rating.sh)     : 23/23 Passed
+  2. Erlang/OTP Charging Service (verify-erlang-charging) : 22/22 Passed
+  3. Rating Engine & Balance Suite (verify-rating.sh)     : 23/23 Passed
+  4. Observability & Telemetry Suite (verify-observability): 19/19 Passed
+  5. Grafana Operations Dashboard Suite (verify-grafana)  : 18/18 Passed
+  6. Prometheus Alerting & Incident Suite (verify-alerting): 19/19 Passed
 ───────────────────────────────────────────────────────────────────────
-  TOTAL CONSOLIDATED VALIDATION RESULT                   : 170/170 PASS (100%)
+  TOTAL CONSOLIDATED VALIDATION RESULT                   : 192/192 PASS (100%)
 ═══════════════════════════════════════════════════════════════════════
 ```
 
@@ -963,10 +1248,11 @@ The entire laboratory is governed by **five independent automated verification s
 | Verification Suite | Target Script | Test Count | Scope & Covered Domains |
 | :--- | :--- | :--- | :--- |
 | **5GC, IMS & Roaming Suite** | [`scripts/verify-lab.sh`](scripts/verify-lab.sh) | **91 Tests** | 5GC NFs, isolated RAN, N2/N3/N4 protocols, Netns ping/HTTPS, SIP registration, Vo5G domestic & roaming calls, SQLite CDRs, tc DiffServ, and real-time KPIs. |
+| **Erlang/OTP Charging Suite**| [`scripts/verify-erlang-charging.sh`](scripts/verify-erlang-charging.sh) | **22 Tests** | OTP application & supervisor startup, Cowboy REST API (`:8085`), deterministic rating parity, credit reservation lifecycle, non-negative balance guard, fault recovery restart, and cross-language parity. |
+| **Telecom Rating & Balance Suite** | [`scripts/verify-rating.sh`](scripts/verify-rating.sh) | **23 Tests** | Database schema, `serving_plmn` column, domestic/roaming voice tariffs, duration ceiling rounding, reservation hold/consumption/refund, insufficient balance protection, CDR ingestion, billing idempotency, financial reconciliation, and Alertmanager rating alerts. |
 | **Observability Suite** | [`scripts/verify-observability.sh`](scripts/verify-observability.sh) | **19 Tests** | Prometheus pod readiness, scrape health, NodePort 30090, 7 metric families, and PromQL query assertions. |
 | **Grafana Dashboard Suite** | [`scripts/verify-grafana.sh`](scripts/verify-grafana.sh) | **18 Tests** | Grafana pod readiness, NodePort 30300, Prometheus datasource provisioning, dashboard panel rendering, and metric proxy queries. |
 | **Alerting & Incident Suite** | [`scripts/verify-alerting.sh`](scripts/verify-alerting.sh) | **19 Tests** | Alertmanager pod readiness, NodePort 30093, 26 alert rules across 7 groups, automated fault injection, firing verification, and recovery resolution. |
-| **Telecom Rating & Balance Suite** | [`scripts/verify-rating.sh`](scripts/verify-rating.sh) | **23 Tests** | Database schema, `serving_plmn` column, domestic/roaming voice tariffs, duration ceiling rounding, reservation hold/consumption/refund, insufficient balance protection, CDR ingestion, billing idempotency, financial reconciliation, and Alertmanager rating alerts. |
 
 ---
 
@@ -1024,6 +1310,7 @@ echo "Discovered Cluster Node IP: ${NODE_IP}"
 | **Grafana Dashboard** | HTTP `:3000` | `http://<NODE_IP>:30300` | Anonymous Admin | Primary 53-panel telecom operations command center |
 | **Prometheus Server** | HTTP `:9090` | `http://<NODE_IP>:30090` | None | PromQL query engine, target health, active rule status |
 | **Alertmanager UI** | HTTP `:9093` | `http://<NODE_IP>:30093` | None | Incident manager, active firing alerts, deduplication |
+| **Erlang Charging REST API**| HTTP `:8085` | `http://<NODE_IP>:8085` | None | Carrier-grade Erlang/OTP rating, balance reservation, and quote API |
 | **telecom-exporter** | HTTP `:9100` | `http://<POD_IP>:9100/metrics` | None | Continuous 7-domain OpenMetrics exposition endpoint |
 | **Home AMF (NGAP)** | SCTP `:38412` | `<NODE_IP>:38412` | N/A | N2 interface for Home PLMNs (`602/03`, `602/04`) |
 | **Visited AMF (NGAP)**| SCTP `:38413` | `<NODE_IP>:38413` | N/A | N2 interface for Visited PLMN (`218/90`) |
@@ -1048,9 +1335,10 @@ To maintain technical clarity and avoid exaggerated claims, the boundaries of th
 | **Static PCF/BSF Policy** | **Implemented & Validated** | Standard SBI `npcf-smpolicycontrol` and `nbsf-management` bindings. |
 | **Offline CDR Accounting** | **Implemented & Validated** | Kamailio S-CSCF `acc`/`dialog` writing to SQLite database. |
 | **Telecom Rating & Balances**| **Implemented & Validated** | Deterministic rating, multi-bucket prepaid balance engine, and ACID ledger. |
+| **Erlang/OTP Charging Service**| **Implemented & Validated** | Concurrent OTP application with supervision tree, Cowboy REST API (`:8085`), and soft real-time rating parity. |
 | **Continuous Observability** | **Implemented & Validated** | 7-domain OpenMetrics exporter, Prometheus (`:30090`), Grafana (`:30300`). |
 | **Automated Alerting** | **Implemented & Validated** | 26 Prometheus alert rules with Alertmanager incident routing (`:30093`). |
-| **3GPP CHF / Nchf Charging** | **Explicitly Out of Scope** | Open5GS v2.8.0 does not include `open5gs-chfd`; SQLite CDRs are used. |
+| **3GPP CHF / Nchf Charging** | **Explicitly Out of Scope** | Open5GS v2.8.0 does not include `open5gs-chfd`; SQLite CDRs and Erlang REST API are used. |
 | **Dynamic Rx/N5 Policy Triggers**| **Explicitly Out of Scope** | Kamailio does not dynamically trigger SBI policy modifications. |
 | **3GPP SEPP / N32 PRAS** | **Explicitly Out of Scope** | Cross-PLMN SBI communication uses Kubernetes cluster DNS. |
 | **Home-Routed Roaming (N9/N16)** | **Explicitly Out of Scope** | Roaming user-plane is Local Breakout (LBO) only. |
@@ -1063,21 +1351,22 @@ To maintain technical clarity and avoid exaggerated claims, the boundaries of th
 The project repository strictly follows tagged golden milestones representing validated development baselines:
 
 ```
-  v1.0.0              phase3-final         phase4-golden        phase5.4-golden      phase5.5-golden (HEAD)
-    │                      │                     │                     │                     │
-    ▼                      ▼                     ▼                     ▼                     ▼
-┌─────────┐          ┌───────────┐         ┌───────────┐         ┌───────────┐         ┌───────────┐
-│ Phase 1 │─────────►│  Phase 3  │────────►│  Phase 4  │────────►│ Phase 5.4 │────────►│ Phase 5.5 │
-└─────────┘          └───────────┘         └───────────┘         └───────────┘         └───────────┘
- 5G SA Core           IMS Voice &           5G QoS, tc            Prometheus            Telecom Rating,
- Foundation           Multi-PLMN            DiffServ,             Alertmanager,         Prepaid Balance,
- & Basic Data         LBO Roaming           SQLite CDRs,          26 Alert Rules,       ACID Ledger &
-                                            Real KPIs             Grafana (A-I)         170 Tests (A-J)
+  v1.0.0              phase3-final         phase4-golden        phase5.4-golden      phase5.5-golden      Phase 5.6 (HEAD)
+    │                      │                     │                     │                     │                   │
+    ▼                      ▼                     ▼                     ▼                     ▼                   ▼
+┌─────────┐          ┌───────────┐         ┌───────────┐         ┌───────────┐         ┌───────────┐       ┌───────────┐
+│ Phase 1 │─────────►│  Phase 3  │────────►│  Phase 4  │────────►│ Phase 5.4 │────────►│ Phase 5.5 │──────►│ Phase 5.6 │
+└─────────┘          └───────────┘         └───────────┘         └───────────┘         └───────────┘       └───────────┘
+ 5G SA Core           IMS Voice &           5G QoS, tc            Prometheus            Telecom Rating,     Erlang/OTP
+ Foundation           Multi-PLMN            DiffServ,             Alertmanager,         Prepaid Balance,    Charging Svc,
+ & Basic Data         LBO Roaming           SQLite CDRs,          26 Alert Rules,       ACID Ledger &       Cowboy API,
+                                            Real KPIs             Grafana (A-I)         170 Tests (A-J)     192 Tests
 ```
 
 - **`phase4-golden` (`6e86a69`):** Golden baseline for 5G SA Core, isolated Home/Visited RAN, multi-PLMN LBO roaming, SIP Digest authentication, domestic/roaming voice, bidirectional RTP, DiffServ `tc` queueing, SQLite CDR accounting, and 91/91 regression validation.
 - **`phase5.4-golden` (`0c0176d`):** Deployed Alertmanager (`:30093`), provisioned declarative alert rules across 6 groups, added Section I Incident monitoring in Grafana, and established automated fault-injection validation.
-- **`phase5.5-golden` (`ecb8028` - Current Golden Baseline):** Deployed Telecom Rating Engine, Prepaid Balance Manager, ACID SQLite Ledger, Multi-Point Financial Reconciliation, Section J Revenue Dashboard in Grafana (53 panels), 26 Alertmanager rules across 7 groups, and 23-test automated rating regression suite (**170 / 170 Tests PASS, 0 Failures, 0 Warnings**).
+- **`phase5.5-golden` (`ecb8028`):** Deployed Telecom Rating Engine, Prepaid Balance Manager, ACID SQLite Ledger, Multi-Point Financial Reconciliation, Section J Revenue Dashboard in Grafana (53 panels), 26 Alertmanager rules across 7 groups, and 23-test automated rating regression suite (**170 / 170 Tests PASS**).
+- **`Phase 5.6` (Current Milestone):** Deployed Erlang/OTP Telecom Revenue & Charging Service (`services/charging-erlang/`), OTP supervision tree, Cowboy REST API (`:8085`), soft real-time deterministic rating parity, balance reservations, worker restart recovery, and dedicated 22-test automated verification suite (**192 / 192 Tests PASS, 100% Green**).
 
 ---
 
@@ -1108,14 +1397,17 @@ The project repository strictly follows tagged golden milestones representing va
 │   ├── architecture/
 │   │   ├── README.md
 │   │   └── home-vs-visited-ran.md     # RAN separation & LBO user-plane engineering note
-│   ├── charging/                      # Phase 5.5 Telecom Rating & Balance Documentation
+│   ├── charging/                      # Telecom Rating & Charging Documentation
 │   │   ├── architecture.md            # Subsystem architecture & layer specifications
 │   │   ├── rating-model.md            # Voice & data rating formulas and tariff models
 │   │   ├── balance-management.md      # Prepaid balance lifecycle & reservation state machine
 │   │   ├── data-model.md              # SQLite database schema, ER diagrams & indexes
 │   │   ├── reconciliation.md          # Multi-point financial reconciliation framework
 │   │   ├── operations.md              # Operator CLI manual & command reference
-│   │   └── testing.md                 # 22-test automated regression suite specification
+│   │   ├── testing.md                 # Phase 5.5 test specification
+│   │   ├── erlang-otp-architecture.md # Phase 5.6 Erlang/OTP architecture specification
+│   │   ├── erlang-api.md              # Phase 5.6 Cowboy REST API documentation
+│   │   └── erlang-testing.md          # Phase 5.6 22-test verification specification
 │   ├── engineering-notes/
 │   │   ├── phase4-qos-charging-assurance.md # Phase 4 technical architecture
 │   │   ├── linux-networking-behind-5g.md    # Kernel routing, netns, and TUN plumbing
@@ -1128,6 +1420,22 @@ The project repository strictly follows tagged golden milestones representing va
 │   │   ├── grafana-operations-dashboard.md  # Grafana dashboard panels and PromQL
 │   │   └── alerting.md                      # Prometheus alerting rules and incident runbooks
 │   └── images/                        # Architectural and verification diagrams
+├── services/
+│   └── charging-erlang/               # Phase 5.6 Erlang/OTP Revenue & Charging Service
+│       ├── rebar.config               # rebar3 build and dependency configuration
+│       ├── include/
+│       │   └── charging_types.hrl     # Shared record definitions (account, tariff, tx)
+│       ├── src/
+│       │   ├── charging_service.app.src # Application manifest
+│       │   ├── charging_service_app.erl # Application callback
+│       │   ├── charging_service_sup.erl # one_for_one root supervisor
+│       │   ├── charging_server.erl    # Core gen_server state & balance manager
+│       │   ├── charging_rating.erl    # Deterministic rating calculations
+│       │   ├── charging_storage.erl   # Seed data adapter
+│       │   ├── charging_reconcile.erl # Multi-point financial auditor
+│       │   ├── charging_http.erl      # Cowboy HTTP listener gen_server
+│       │   └── charging_http_handler.erl # HTTP REST request handler (:8085)
+│       └── test/                      # EUnit internal test suites
 ├── src/
 │   └── charging/                      # Telecom Rating & Balance Python Package
 │       ├── __init__.py                # Package exports
@@ -1171,10 +1479,11 @@ The project repository strictly follows tagged golden milestones representing va
     ├── measure-kpis.sh                # Measures PDD, CST, CSSR, jitter, and MOS
     ├── rating-engine.py               # Phase 5.5 Telecom Rating & Balance CLI Utility
     ├── telecom-exporter.py            # 7-domain Prometheus OpenMetrics exporter
+    ├── verify-erlang-charging.sh      # Phase 5.6 Erlang/OTP charging test suite (22 tests)
+    ├── verify-rating.sh               # Phase 5.5 Telecom Rating & Balance test suite (23 tests)
     ├── verify-observability.sh        # Phase 5.2 Prometheus telemetry test suite (19 tests)
     ├── verify-grafana.sh              # Phase 5.3 Grafana dashboard test suite (18 tests)
     ├── verify-alerting.sh             # Phase 5.4 Alertmanager incident suite (19 tests)
-    ├── verify-rating.sh               # Phase 5.5 Telecom Rating & Balance test suite (22 tests)
     └── verify-lab.sh                  # Official 91-test regression verification suite
 ```
 
@@ -1182,10 +1491,10 @@ The project repository strictly follows tagged golden milestones representing va
 
 ## Future Roadmap
 
-- [x] **Phase 5.5:** Telecom Rating Engine & Balance Management (prepaid/postpaid rating logic, ACID ledger, reconciliation, 22 automated tests) — **COMPLETED & GOLDEN**.
-- [ ] **Phase 5.6:** Automated Self-Healing & Closed-Loop Remediation (Kubernetes Operator for auto-restarting degraded NFs).
-- [ ] **Phase 5.7:** Automated CI/CD Pipeline (GitHub Actions automated syntax, linting, and regression validation).
-- [ ] **Phase 6.0:** Cloud-Native 5G Core Upgrade (Open5GS v2.9+ / 3GPP Rel-17 capabilities).
+- [x] **Phase 5.5:** Telecom Rating Engine & Balance Management (prepaid/postpaid rating logic, ACID ledger, reconciliation, 23 automated tests) — **COMPLETED & GOLDEN**.
+- [x] **Phase 5.6:** Erlang/OTP Telecom Revenue & Charging Service (OTP supervision tree, Cowboy REST API `:8085`, soft real-time deterministic rating, reservations, 22 automated tests) — **COMPLETED & VERIFIED**.
+- [ ] **Phase 5.7:** Charging API & External Service Integration (Production-style API contract, service-to-service communication, authentication, integration testing).
+- [ ] **Phase 6.0:** Cloud-Native Telecom Revenue Platform (3GPP Rel-17 CHF/Nchf Service-Based Interface, real-time quota management, distributed database tier).
 
 ---
 

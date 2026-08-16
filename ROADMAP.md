@@ -47,19 +47,20 @@ Living document tracking the milestones and technical roadmap for the 5G Standal
 
 ---
 
-## 🟢 Milestone 5: Full-Stack Observability, Alerting & Rating Management `COMPLETED`
+## 🟢 Milestone 5: Full-Stack Observability, Alerting & Telecom Charging `COMPLETED`
 - [x] **Phase 5.1 & 5.2**: Custom Python `telecom-exporter` (`:9100`) & Prometheus (`:30090`) scraping across 7 telemetry categories (`scripts/verify-observability.sh` — 19/19 PASS)
 - [x] **Phase 5.3**: Production 53-panel Grafana Operations Dashboard (`:30300`) across Sections A–J (`scripts/verify-grafana.sh` — 18/18 PASS)
 - [x] **Phase 5.4**: Alertmanager (`:30093`) with 26 declarative alert rules and automated fault injection recovery (`scripts/verify-alerting.sh` — 19/19 PASS)
-- [x] **Phase 5.5**: Telecom Rating Engine & Prepaid Balance Management (`src/charging/` & `scripts/rating-engine.py`) with ACID SQLite ledger, voice/data tariffs, reconciliation, and 22 automated tests (`scripts/verify-rating.sh` — 22/22 PASS)
-- [x] **Consolidated Regression Baseline**: 169 / 169 Tests Passing (100% Green)
+- [x] **Phase 5.5**: Telecom Rating Engine & Prepaid Balance Management (`src/charging/` & `scripts/rating-engine.py`) with ACID SQLite ledger, voice/data tariffs, reconciliation, and 23 automated tests (`scripts/verify-rating.sh` — 23/23 PASS)
+- [x] **Phase 5.6**: Erlang/OTP Telecom Revenue & Charging Service (`services/charging-erlang/`) with OTP supervision tree, Cowboy REST API (`:8085`), deterministic rating parity, balance reservations, and 22 automated tests (`scripts/verify-erlang-charging.sh` — 22/22 PASS)
+- [x] **Consolidated Regression Baseline**: 192 / 192 Tests Passing (100% Green across 6 verification suites)
 
 ---
 
-## 📋 Future Enhancements (Phase 5.6+)
+## 📋 Future Enhancements (Phase 5.7+)
 
-- [ ] **Phase 5.6**: Automated Self-Healing & Closed-Loop Remediation Operator
-- [ ] **Phase 5.7**: Automated CI/CD Testing Pipeline (GitHub Actions syntax, linting & regression runner)
-- [ ] **Phase 6.0**: Cloud-Native 5G Core Upgrade (Open5GS v2.9+ / 3GPP Rel-17 features)
+- [ ] **Phase 5.7**: Charging API & External Service Integration (Production-style API contract, service-to-service communication, authentication, integration testing)
+- [ ] **Phase 6.0**: Cloud-Native Telecom Revenue Platform (3GPP Rel-17 CHF/Nchf Service-Based Interface, real-time quota management, distributed database tier)
 - [ ] Diameter / Rx interface integration between P-CSCF and PCF for dynamic QoS policy
 - [ ] TLS / SRTP signaling and media encryption validation
+

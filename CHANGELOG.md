@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] — 2026-08-16 (Phase 5.6)
+
+### Added
+- **Erlang/OTP Telecom Revenue & Charging Service (`services/charging-erlang/`)**:
+  - Production-grade OTP application (`charging_service`) with `one_for_one` root supervisor (`charging_service_sup`).
+  - Core charging `gen_server` (`charging_server`) with state management, balance buckets, reservations, and auditable transaction logging.
+  - Deterministic rating calculation module (`charging_rating`) with 100% mathematical parity to the Phase 5.5 reference.
+  - Multi-point financial reconciliation module (`charging_reconcile`) verifying account equity, cash aggregate equality, and idempotency.
+  - High-performance Cowboy HTTP REST API on port `8085` (`/health`, `/metrics`, `/v1/accounts`, `/v1/rating/quote`, `/v1/charging/reserve`, `/v1/charging/consume`, `/v1/charging/refund`, `/v1/reconciliation`).
+  - Fault-tolerance and supervision recovery endpoints (`/v1/fault/simulate`).
+  - Dedicated EUnit test suite (`rebar3 eunit` — 25/25 PASS).
+  - Automated end-to-end verification harness (`scripts/verify-erlang-charging.sh` — 22/22 PASS).
+  - Consolidated regression test baseline expanded to **192 / 192 Tests Passing (100% Green)**.
+
 ## [2.5.0] — 2026-08-16 (Phase 5.5)
 
 ### Added

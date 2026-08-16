@@ -1,0 +1,18 @@
+{application, charging_service,
+ [{description, "Erlang/OTP Telecom Revenue & Charging Service for 5G-IMS-Lab"},
+  {vsn, "1.0.0"},
+  {registered, [charging_server, charging_http, charging_service_sup]},
+  {mod, {charging_service_app, []}},
+  {applications,
+   [kernel,
+    stdlib,
+    cowboy,
+    jsx
+   ]},
+  {env, [
+    {http_port, 8085}
+  ]},
+  {modules, []},
+  {licenses, ["MIT"]},
+  {links, []}
+ ]}.
