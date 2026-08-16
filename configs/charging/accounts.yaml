@@ -1,0 +1,46 @@
+# Subscriber Accounts & Seed Balances for 5G-IMS-Lab Prepaid Charging
+accounts:
+  - id: "acc-ue1"
+    name: "UE1 Domestic Egypt Subscriber"
+    imsi: "602030000000001"
+    msisdn: "+201000000001"
+    sip_uri: "sip:ue1@ims.lab"
+    plmn: "602/03"
+    rate_plan: "standard-prepaid"
+    initial_balance: 50.00
+    currency: "LAB"
+    status: "ACTIVE"
+
+  - id: "acc-ue2"
+    name: "UE2 Domestic Egypt Subscriber"
+    imsi: "602040000000002"
+    msisdn: "+201000000002"
+    sip_uri: "sip:ue2@ims.lab"
+    plmn: "602/04"
+    rate_plan: "standard-prepaid"
+    initial_balance: 25.00
+    currency: "LAB"
+    status: "ACTIVE"
+
+  - id: "acc-ue3"
+    name: "UE3 Roaming Subscriber (Bosnia VPLMN 218/90)"
+    imsi: "602030000000003"
+    msisdn: "+201000000003"
+    sip_uri: "sip:ue3@ims.lab"
+    plmn: "602/03"
+    serving_plmn: "218/90"
+    rate_plan: "premium-roaming"
+    initial_balance: 30.00
+    currency: "LAB"
+    status: "ACTIVE"
+
+  - id: "acc-test-broke"
+    name: "Zero Balance Test Subscriber"
+    imsi: "999990000000099"
+    msisdn: "+201099999999"
+    sip_uri: "sip:broke@ims.lab"
+    plmn: "602/03"
+    rate_plan: "standard-prepaid"
+    initial_balance: 0.02        # Insufficient for setup fee (0.05)
+    currency: "LAB"
+    status: "ACTIVE"

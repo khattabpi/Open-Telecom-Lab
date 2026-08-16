@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] — 2026-08-16 (Phase 5.5)
+
+### Added
+- **Telecom Rating Engine Subsystem (`src/charging/`)**:
+  - Deterministic, explainable rating engine for voice and data usage events.
+  - Multi-PLMN domestic vs. roaming tariff classification (`domestic` vs `roaming_vplmn`).
+  - Declarative configuration files: `configs/charging/rate-plans.yaml`, `configs/charging/tariffs.yaml`, `configs/charging/accounts.yaml`.
+  - Configurable setup fees, duration rates, minimum billable units, and ceiling rounding (`CEIL`).
+  - Zero-rated policy for Vo5G IMS signaling bearer (`dnn: ims`).
+- **Prepaid Balance Manager & Transaction Journal**:
+  - Three-bucket balance architecture (`balance_available`, `balance_reserved`, `balance_consumed`).
+  - Session reservation lifecycle (`RESERVE` hold $\rightarrow$ `CONSUME` with refund $\rightarrow$ `RELEASE`).
+  - Strict non-negative balance enforcement with automated rejection on insufficient funds.
+  - ACID SQLite database (`data/charging.sqlite`) with WAL mode and foreign key constraints.
+  - Immutable audit ledger (`charging_transactions`) tracking all credit and debit operations.
+- **Financial Reconciliation Engine (`src/charging/reconciliation.py`)**:
+  - Mathematical integrity audit proving $\sum \text{Ledger} \equiv \text{Available} + \text{Reserved}$.
+  - Idempotent rating protection rejecting duplicate CDR ingestion without double-charging.
+- **CLI Management Utility (`scripts/rating-engine.py`)**:
+  - Rich operator subcommands: `init-db`, `rate-cdrs`, `rate-data`, `balance`, `top-up`, `history`, `reconcile`, `report`, `simulate-call`.
+- **Full-Stack Observability & Incident Detection Integration**:
+  - Extended `telecom-exporter` (`:9100`) with 12 Phase 5.5 metrics (`charging_revenue_total`, `charging_balance_available_total`, etc.).
+  - Added **Section J: Telecom Rating, Prepaid Balance & Revenue Management** to Grafana Dashboard (`:30300`), expanding total dashboard panels to 53.
+  - Added 5 declarative charging alert rules to Alertmanager (`telecom_rating_charging_alerts`).
+- **Automated Verification Suite (`scripts/verify-rating.sh`)**:
+  - 22 deterministic automated tests covering CLI, schema, rating, balance lifecycle, idempotency, reconciliation, and observability.
+  - Total repository regression test count expanded to **169 / 169 Tests Passing (100% Green)**.
+
+### Clarifications & Scope
+- **Laboratory-Grade Offline Rating**: Designed for revenue engineering and tariff experimentation using SQLite CDRs; distinct from a 3GPP Rel-16 production online Charging Function (CHF / `Nchf`).
+
+---
+
 ## [2.0.0] — 2026-08-15
 
 ### Added

@@ -23,6 +23,9 @@ UERANSIM/
 logs/
 *.pcap
 *.pcapng
+data/*.sqlite
+data/*.sqlite-wal
+data/*.sqlite-shm
 
 # ─── Secrets & Environment Overrides ───────────────────────────
 *.pem
