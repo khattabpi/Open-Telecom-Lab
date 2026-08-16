@@ -67,5 +67,9 @@ python3 scripts/rating-engine.py reconcile --json
 ### 2.9 Simulate Call Session Lifecycle
 Simulates a real-time call lifecycle with reservation hold, rating calculation, and reservation consumption:
 ```bash
-python3 scripts/rating-engine.py simulate-call --caller acc-ue1 --callee sip:ue3@ims.lab --duration 5.0
+# Domestic Call Simulation (UE1 -> UE2, 10s):
+python3 scripts/rating-engine.py simulate-call --caller acc-ue1 --callee sip:ue2@ims.lab --duration 10.0
+
+# Roaming Call Simulation (UE3 in VPLMN 218/90 -> UE1, 10s):
+python3 scripts/rating-engine.py simulate-call --caller acc-ue3 --callee sip:ue1@ims.lab --duration 10.0
 ```

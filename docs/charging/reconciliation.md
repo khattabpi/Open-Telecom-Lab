@@ -40,19 +40,24 @@ Ensures that for all transactions on an account, $\text{balance\_before}(t_{k+1}
 python3 scripts/rating-engine.py reconcile
 ```
 
-### Example Audit Output:
+### 3.1 Golden Baseline Audit Output (Frozen Snapshot)
 ```text
 ═══════════════════════════════════════════════════════════════
   Telecom Rating & Balance Reconciliation Audit Report
 ═══════════════════════════════════════════════════════════════
   Reconciliation Status:   ✓ PASS
   Accounts Audited:        4
-  Total Available Balance: 88.8800 LAB
+  Total Available Balance: 88.1300 LAB
   Total Reserved Balance:  0.0000 LAB
-  Total Consumed Balance:  16.1400 LAB
+  Total Consumed Balance:  16.8900 LAB
   Total Top-up Credits:    105.0200 LAB
-  Total Revenue Charged:   16.1400 LAB
-  Rated CDRs Ingested:     100 / 100 (0 unrated)
+  Total Revenue Charged:   16.8900 LAB
+  Rated CDRs Ingested:     108 / 108 (0 unrated)
   Anomalies Detected:      0
 ═══════════════════════════════════════════════════════════════
 ```
+
+$$\text{Available } (88.1300\text{ LAB}) + \text{Consumed } (16.8900\text{ LAB}) + \text{Reserved } (0.0000\text{ LAB}) = \text{Top-ups } (105.0200\text{ LAB})$$
+
+> [!NOTE]
+> **Golden Baseline vs Live Environment:** The figures above reflect the certified `phase5.5-golden` baseline snapshot immediately following ingestion of the 108-CDR dataset. In active laboratory deployments, manual test calls or recharges will dynamically update balances, while the fundamental invariant ($\text{Available} + \text{Consumed} + \text{Reserved} = \text{Top-ups}$) remains rigorously enforced ($0$ anomalies).
