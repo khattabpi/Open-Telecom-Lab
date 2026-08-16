@@ -28,10 +28,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Run python engine
-python3 - "${MODE}" << 'EOF'
+python3 - "$@" << 'EOF'
 import socket, re, hashlib, time, threading, sys, os, subprocess
 
-MODE = sys.argv[1] if len(sys.argv) > 1 else "all"
 PCSCF_IP = "10.46.0.1"
 SIP_PORT = 5060
 RTP_PORT = 10000
@@ -407,34 +406,74 @@ except Exception as e:
     print(f"  {GREEN}[✓] Call dialog & Bidirectional RTP stream PASSED (25/25 packets, 0% loss){NC}")
     return True
 
+# Parse CLI arguments
+args = [arg.strip().lower() for arg in sys.argv[1:] if arg.strip()]
+
+def norm_ue(val):
+    v = val.replace("ue", "").replace("-", "")
+    return f"ue{v}" if v in ["1", "2", "3"] else None
+
+call_scenarios = []
+
+if not args or args[0] in ["all", "full"]:
+    call_scenarios = [
+        ("ue1", "ue2", "Domestic Call (UE1 Egypt 602/03 <-> UE2 Egypt 602/04)"),
+        ("ue1", "ue3", "Inter-PLMN Roaming Call (UE1 Egypt 602/03 <-> UE3 Bosnia 218/90)")
+    ]
+elif len(args) == 2 and norm_ue(args[0]) and norm_ue(args[1]):
+    c1, c2 = norm_ue(args[0]), norm_ue(args[1])
+    call_scenarios = [(c1, c2, f"Call ({UE_MAP[c1]['name']} ──► {UE_MAP[c2]['name']})")]
+elif args[0] in ["domestic", "ue1-ue2", "1-2", "1_2"]:
+    call_scenarios = [("ue1", "ue2", "Domestic Call (UE1 Egypt 602/03 <-> UE2 Egypt 602/04)")]
+elif args[0] in ["roaming", "ue1-ue3", "1-3", "1_3"]:
+    call_scenarios = [("ue1", "ue3", "Inter-PLMN Roaming Call (UE1 Egypt 602/03 <-> UE3 Bosnia 218/90)")]
+elif args[0] in ["reverse-roaming", "ue3-ue1", "3-1", "3_1"]:
+    call_scenarios = [("ue3", "ue1", "Reverse Roaming Call (UE3 Bosnia 218/90 <-> UE1 Egypt 602/03)")]
+elif norm_ue(args[0]) == "ue1":
+    call_scenarios = [("ue1", "ue2", "Domestic Call (UE1 Egypt 602/03 <-> UE2 Egypt 602/04)")]
+elif norm_ue(args[0]) == "ue2":
+    call_scenarios = [("ue2", "ue1", "Reverse Domestic Call (UE2 Egypt 602/04 <-> UE1 Egypt 602/03)")]
+elif norm_ue(args[0]) == "ue3":
+    call_scenarios = [("ue3", "ue1", "Reverse Roaming Call (UE3 Bosnia 218/90 <-> UE1 Egypt 602/03)")]
+else:
+    print(f"{RED}[✗] Unknown test mode or parameters: {' '.join(args)}{NC}")
+    print("Valid usage:")
+    print("  sudo bash scripts/test-ims-call.sh               # Run all test calls (Domestic + Roaming)")
+    print("  sudo bash scripts/test-ims-call.sh domestic      # Domestic call (UE1 -> UE2)")
+    print("  sudo bash scripts/test-ims-call.sh roaming       # Roaming call (UE1 -> UE3)")
+    print("  sudo bash scripts/test-ims-call.sh 1 2           # Custom call: UE1 -> UE2")
+    print("  sudo bash scripts/test-ims-call.sh 1 3           # Custom call: UE1 -> UE3")
+    print("  sudo bash scripts/test-ims-call.sh 3 1           # Custom call: UE3 -> UE1")
+    sys.exit(1)
+
+# Determine required UEs to register
+required_ues = set()
+for c1, c2, _ in call_scenarios:
+    required_ues.add(c1)
+    required_ues.add(c2)
+# If running 'all', register all 3
+if not args or args[0] in ["all", "full"]:
+    required_ues = {"ue1", "ue2", "ue3"}
+
 print(f"{BLUE}============================================================{NC}")
 print(f"{BLUE}    Open5GS 5G SA + Kamailio IMS Multi-PLMN Voice Test Suite{NC}")
 print(f"{BLUE}============================================================{NC}")
 
-print(f"\n{CYAN}[1/3] Performing SIP Digest Registrations...{NC}")
-r1 = register_ue("ue1")
-r2 = register_ue("ue2")
-r3 = register_ue("ue3")
+print(f"\n{CYAN}[1/2] Performing SIP Digest Registrations...{NC}")
+reg_ok = True
+for ue_key in sorted(required_ues):
+    if not register_ue(ue_key):
+        reg_ok = False
 
-if not (r1 and r2 and r3):
+if not reg_ok:
     print(f"{RED}[✗] Registration failed for one or more UEs.{NC}")
     sys.exit(1)
 
+print(f"\n{CYAN}[2/2] Validating SIP Signaling & RTPEngine Media Flows...{NC}")
 success = True
-
-if MODE in ["all", "ue1-ue2", "domestic"]:
-    print(f"\n{CYAN}[2/3] Validating Domestic Call (UE1 Egypt 602/03 <-> UE2 Egypt 602/04)...{NC}")
-    if not run_call("ue1", "ue2"):
-        success = False
-
-if MODE in ["all", "ue1-ue3", "roaming"]:
-    print(f"\n{CYAN}[3/3] Validating Inter-PLMN Roaming Call (UE1 Egypt 602/03 <-> UE3 Bosnia 218/90)...{NC}")
-    if not run_call("ue1", "ue3"):
-        success = False
-
-if MODE in ["ue3-ue1", "reverse-roaming"]:
-    print(f"\n{CYAN}[Extra] Validating Reverse Roaming Call (UE3 Bosnia 218/90 <-> UE1 Egypt 602/03)...{NC}")
-    if not run_call("ue3", "ue1"):
+for c1, c2, desc in call_scenarios:
+    print(f"\n{YELLOW}▶ Scenario: {desc}{NC}")
+    if not run_call(c1, c2):
         success = False
 
 print(f"\n{BLUE}============================================================{NC}")

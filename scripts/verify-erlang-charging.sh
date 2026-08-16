@@ -34,8 +34,16 @@ cleanup() {
         kill "${ERLANG_PID}" 2>/dev/null || true
         wait "${ERLANG_PID}" 2>/dev/null || true
     fi
+    pkill -9 -f "charging_service" 2>/dev/null || true
+    fuser -k "${HTTP_PORT}/tcp" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
+
+# Ensure port 8085 is completely free from any stale daemon
+pkill -9 -f "charging_service" 2>/dev/null || true
+fuser -k "${HTTP_PORT}/tcp" 2>/dev/null || true
+sleep 0.5
+
 
 log_pass() {
     echo -e "  ${GREEN}[✓]${NC} ${GREEN}$1${NC}"
