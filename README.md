@@ -24,6 +24,9 @@
 
 - [Overview](#overview)
 - [Key Capabilities & Feature Matrix](#key-capabilities--feature-matrix)
+- [⚡ Quick Manual Validation (15-Step Fast Track)](#-quick-manual-validation-15-step-fast-track)
+- [🔍 Three-Tier Validation Methodology](#-three-tier-validation-methodology)
+- [✨ What Success Looks Like: Layer-by-Layer Verification Criteria](#-what-success-looks-like-layer-by-layer-verification-criteria)
 - [End-to-End System Architecture](#end-to-end-system-architecture)
 - [Technology Stack](#technology-stack)
 - [🚀 Quick Start & Full Deployment Guide](#-quick-start--full-deployment-guide)
@@ -35,6 +38,7 @@
 - [Telecom Rating & Prepaid Balance Subsystem (Phase 5.5)](#telecom-rating--prepaid-balance-subsystem-phase-55)
 - [Erlang/OTP Telecom Revenue & Charging Service (Phase 5.6)](#erlangotp-telecom-revenue--charging-service-phase-56)
 - [Full-Stack Observability: Prometheus & Grafana](#full-stack-observability-prometheus--grafana)
+- [📊 Dedicated Grafana Live Validation Runbook](#-dedicated-grafana-live-validation-runbook)
 - [Alerting & Incident Detection (Alertmanager)](#alerting--incident-detection-alertmanager)
 - [Service Assurance & Real-Time KPIs](#service-assurance--real-time-kpis)
 - [✅ Validation & Test Results](#-validation--test-results)
@@ -90,6 +94,132 @@ The laboratory establishes an end-to-end telecommunications environment supporti
 │ • S-NSSAI Network Slicing     │ • Offline SQLite CDR Generator   │ • ITU-T G.107 Service Assurance KPI Engine    │
 │ • 3 Registered UEs / 6 PDUs   │ • Voice Quality (MOS 4.4 / 4.50) │ • 192 / 192 Automated Tests (100% Green)      │
 └───────────────────────────────┴──────────────────────────────────┴───────────────────────────────────────────────┘
+```
+
+---
+
+## ⚡ Quick Manual Validation (15-Step Fast Track)
+
+For any engineer wishing to validate the entire live system directly from the host in under 3 minutes:
+
+```bash
+# 1. Discover active Kubernetes Node IP
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+echo "Active Node IP: ${NODE_IP}"
+
+# 2. Verify all Kubernetes pods are Running & 1/1 Ready
+kubectl get pods -A -o wide
+
+# 3. Verify isolated gNodeBs (Home :38412 & Visited :38413)
+ps aux | grep nr-gnb | grep -v grep
+
+# 4. Verify all 3 UEs (UE1 Egypt 602/03, UE2 Egypt 602/04, UE3 Bosnia 218/90)
+ps aux | grep nr-ue | grep -v grep
+
+# 5. Verify 5G Internet PDU session (Ping 8.8.8.8 & HTTPS curl)
+sudo ip netns exec ueransim-602030000000001-internet-psi1 ping -c 2 8.8.8.8
+sudo ip netns exec ueransim-602030000000001-internet-psi1 curl -s -I https://www.google.com | head -n 1
+
+# 6. Verify 5G IMS Bearer PDU session (Ping IMS Gateway 10.46.0.1)
+sudo ip netns exec ueransim-602030000000001-ims-psi2 ping -c 2 10.46.0.1
+
+# 7. Verify P-CSCF SIP Service operational on UDP :5060
+sudo ss -lunp | grep 5060
+
+# 8. Execute Domestic IMS Vo5G Call (UE1 Egypt 602/03 -> UE2 Egypt 602/04)
+sudo bash scripts/test-ims-call.sh 1 2
+
+# 9. Execute Inter-PLMN Roaming Vo5G Call (UE1 Egypt 602/03 -> UE3 Bosnia 218/90)
+sudo bash scripts/test-ims-call.sh 1 3
+
+# 10. Execute Reverse Roaming Call (UE3 Bosnia 218/90 -> UE1 Egypt 602/03)
+sudo bash scripts/test-ims-call.sh 3 1
+
+# 11. Inspect RTPEngine Proxy media logs (SDP rewriting & 25/25 RTP packets)
+kubectl logs -n ims deploy/rtpengine --tail=20
+
+# 12. Query Prometheus Telemetry Endpoint
+curl -s "http://${NODE_IP}:30090/api/v1/query?query=open5gs_5gc_registered_ues" | jq .data.result
+
+# 13. Query Erlang/OTP Revenue & Rating REST API (:8085)
+curl -s http://127.0.0.1:8085/health | jq .
+curl -s http://127.0.0.1:8085/v1/accounts/acc-ue3/balance | jq .
+
+# 14. Open Grafana Operations Dashboard in Browser
+echo "Open Grafana: http://${NODE_IP}:30300"
+
+# 15. Run Official Automated Regression Suite Gate (192 Tests)
+sudo bash scripts/verify-lab.sh
+bash scripts/verify-erlang-charging.sh
+```
+
+---
+
+## 🔍 Three-Tier Validation Methodology
+
+To ensure absolute engineering clarity and avoid confusing manual diagnostic testing with automated CI/CD gating, this project explicitly organizes validation into **three distinct tiers**:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                  THREE-TIER VALIDATION MATRIX                                    │
+├──────────────────────────┬──────────────────────────────────────┬────────────────────────────────┤
+│ Validation Tier          │ Execution Mechanism                  │ Primary Scope & Intent         │
+├──────────────────────────┼──────────────────────────────────────┼────────────────────────────────┤
+│ **Tier A: Manual**       │ Direct OS / Kubernetes commands      │ Forensic verification of real  │
+│ **Infrastructure &**     │ (`kubectl`, `ip netns`, `ping`,      │ process health, kernel TUNs,   │
+│ **Protocol Inspection**  │ `curl`, `ss`, `kamcmd`, `tcpdump`)   │ routes, and socket bindings.   │
+├──────────────────────────┼──────────────────────────────────────┼────────────────────────────────┤
+│ **Tier B: Operator**     │ Targeted scenario CLI invocations    │ Real SIP signaling sockets,    │
+│ **Triggered IMS Voice**  │ (`scripts/test-ims-call.sh 1 2`,     │ Digest challenge/response, and │
+│ **Validation Harness**   │  `1 3`, `3 1`, `domestic`, `roaming`)│ bidirectional RTP media flows. │
+├──────────────────────────┼──────────────────────────────────────┼────────────────────────────────┤
+│ **Tier C: Consolidated** │ 6 Independent verification scripts   │ Strict regression gates, test  │
+│ **Automated Regression** │ (`verify-lab.sh`, `verify-rating.sh`,│ isolation, and mathematical    │
+│ **Suite (192 Tests)**    │  `verify-erlang-charging.sh`, etc.)  │ reconciliation audits (100%).  │
+└──────────────────────────┴──────────────────────────────────────┴────────────────────────────────┘
+```
+
+---
+
+## ✨ What Success Looks Like: Layer-by-Layer Verification Criteria
+
+To enable deterministic verification, every layer of the 5G-IMS-Lab defines clear, unambiguous criteria for what a passing state looks like:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                WHAT SUCCESS LOOKS LIKE IN 5G-IMS-LAB                             │
+├──────────────────────────┬──────────────────────────────────────┬────────────────────────────────┤
+│ Layer / Function         │ Concrete Runtime Evidence            │ Expected Passing State         │
+├──────────────────────────┼──────────────────────────────────────┼────────────────────────────────┤
+│ **1. 5G RAN & Core**     │ • `kubectl get pods -A`              │ • All 22 pods Running & 1/1    │
+│                          │ • `ps aux | grep -E 'nr-gnb|nr-ue'`  │ • 2 gNodeBs & 3 UEs active     │
+│                          │ • `open5gs_5gc_registered_ues`       │ • Value = 3 (602_03, 04, 218_90│
+├──────────────────────────┼──────────────────────────────────────┼────────────────────────────────┤
+│ **2. 5G User-Plane**     │ • `ip netns exec ... ping 8.8.8.8`   │ • 0% loss (RTT ~50-70 ms)      │
+│                          │ • `ip netns exec ... curl google.com`│ • HTTP/2 200 OK                │
+│                          │ • `ip netns exec ... ping 10.46.0.1` │ • 0% loss (RTT < 2 ms)         │
+├──────────────────────────┼──────────────────────────────────────┼────────────────────────────────┤
+│ **3. IMS Registration**  │ • `OPTIONS sip:10.46.0.1:5060`       │ • SIP/2.0 200 OK               │
+│                          │ • Unauth `REGISTER`                  │ • SIP/2.0 401 Unauthorized     │
+│                          │ • Auth `REGISTER` (MD5 Digest)       │ • SIP/2.0 200 OK (Exp: 3600s)  │
+│                          │ • `kamcmd ul.dump`                   │ • 3 active AoR bindings        │
+├──────────────────────────┼──────────────────────────────────────┼────────────────────────────────┤
+│ **4. Domestic Voice**    │ • `INVITE` -> `180` -> `200` -> `ACK`│ • Dialog established (200 OK)  │
+│    **(UE1 ↔ UE2)**       │ • RTPEngine logs (`Creating call`)   │ • 25/25 RTP packets (0% loss)  │
+│                          │ • `kamailio.sqlite`                  │ • Domestic CDR created (+1)    │
+├──────────────────────────┼──────────────────────────────────────┼────────────────────────────────┤
+│ **5. Roaming Voice**     │ • `INVITE` (UE1 -> UE3 Bosnia LBO)   │ • Cross-PLMN dialog (200 OK)   │
+│    **(UE1 ↔ UE3 LBO)**   │ • RTPEngine logs (`offer/answer`)    │ • 25/25 RTP packets (0% loss)  │
+│                          │ • `kamailio.sqlite`                  │ • Roaming CDR created (+1)     │
+├──────────────────────────┼──────────────────────────────────────┼────────────────────────────────┤
+│ **6. Revenue & Rating**  │ • `curl :8085/health`                │ • status: "UP", OTP 25         │
+│                          │ • `curl :8085/v1/rating/quote`       │ • Tariff math matches CEIL     │
+│                          │ • `curl :8085/v1/reconciliation`     │ • status: "PASS", 0 anomalies  │
+├──────────────────────────┼──────────────────────────────────────┼────────────────────────────────┤
+│ **7. Operations Center** │ • Grafana (`http://<NODE_IP>:30300`) │ • 53 panels rendering data     │
+│                          │ • Prometheus (`:30090`)              │ • 7 metric domains scraped     │
+│                          │ • Alertmanager (`:30093`)            │ • 0 firing alerts (steady-state│
+└──────────────────────────┴──────────────────────────────────────┴────────────────────────────────┘
 ```
 
 ---
@@ -344,19 +474,49 @@ sudo bash scripts/verify-lab.sh
 
 ### 1. PLMN Allocation & Radio Separation
 
-| Network Domain | Country | PLMN ID (MCC/MNC) | TAC | gNodeB Instance | N2 SCTP Endpoint | Assigned Radio IP |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Home PLMN 1** | Egypt | `602/03` | 1 | `gNodeB-Home` | `172.19.0.2:38412` | `127.0.0.1` |
-| **Home PLMN 2** | Egypt | `602/04` | 1 | `gNodeB-Home` | `172.19.0.2:38412` | `127.0.0.1` |
-| **Visited PLMN** | Bosnia & Herzegovina | `218/90` | 1 | `gNodeB-Visited` | `172.19.0.2:38413` | `127.0.0.2` |
-
-### 2. Subscriber Identity & Dual PDU Session Profiles
-
-| UE | Subscriber Type | IMSI / SUPI | HPLMN | Serving PLMN | Internet IP Pool | IMS Bearer IP Pool | SIP Identity (AoR) |
+| Network Domain | Country | PLMN ID (MCC/MNC) | TAC | gNodeB Instance | N2 SCTP Endpoint | Radio Bind IP | Supported Subscriber Profiles |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **UE1** | Domestic | `602030000000001` | `602/03` | `602/03` (Home) | Dynamic (`10.45.0.10–99`) | Dynamic (`10.46.0.10–99`) | `sip:ue1@ims.lab` |
-| **UE2** | Domestic | `602040000000002` | `602/04` | `602/04` (Home) | Dynamic (`10.45.0.10–99`) | Dynamic (`10.46.0.10–99`) | `sip:ue2@ims.lab` |
-| **UE3** | Roaming | `602030000000003` | `602/03` | `218/90` (Visited)| Dynamic (`10.45.0.100–199`)| Dynamic (`10.46.0.100–199`)| `sip:ue3@ims.lab` |
+| **Home PLMN 1** | Egypt | `602/03` | 1 | `gNodeB-Home` | `172.19.0.2:38412` | `127.0.0.1` | UE1 (Domestic 602/03) |
+| **Home PLMN 2** | Egypt | `602/04` | 1 | `gNodeB-Home` | `172.19.0.2:38412` | `127.0.0.1` | UE2 (Domestic 602/04) |
+| **Visited PLMN** | Bosnia & Herzegovina | `218/90` | 1 | `gNodeB-Visited` | `172.19.0.2:38413` | `127.0.0.2` | UE3 (Roaming into 218/90) |
+
+```bash
+# Start isolated Home gNodeB (serves 602/03 & 602/04 -> HAMF :38412)
+sudo bash scripts/run-gnb.sh home
+
+# Start isolated Visited gNodeB (serves 218/90 -> VAMF :38413)
+sudo bash scripts/run-gnb.sh visited
+
+# Or start both gNodeBs simultaneously
+sudo bash scripts/run-gnb.sh all
+```
+
+### 2. Subscriber Identity & Roaming Relationships
+
+The laboratory models authentic 3GPP roaming relationships:
+
+| UE | Subscriber Type | IMSI / SUPI | HPLMN (Home) | Serving PLMN (Visited) | Roaming Relationship | Internet IP Pool | IMS Bearer IP Pool | SIP Identity (AoR) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **UE1** | Domestic | `602030000000001` | `602/03` | `602/03` (Home) | Domestic Subscriber | Dynamic (`10.45.0.10–99`) | Dynamic (`10.46.0.10–99`) | `sip:ue1@ims.lab` |
+| **UE2** | Domestic | `602040000000002` | `602/04` | `602/04` (Home) | Domestic Subscriber | Dynamic (`10.45.0.10–99`) | Dynamic (`10.46.0.10–99`) | `sip:ue2@ims.lab` |
+| **UE3** | Roaming (LBO) | `602030000000003` | `602/03` | `218/90` (Visited)| Inbound Roamer | Dynamic (`10.45.0.100–199`)| Dynamic (`10.46.0.100–199`)| `sip:ue3@ims.lab` |
+
+> [!IMPORTANT]
+> **Understanding UE3 Roaming Architecture:**
+> - **Subscription Identity (HPLMN):** UE3 belongs to Egypt Home PLMN `602/03`. Its 5G-AKA credentials (`K`, `OPc`, `SQN`) reside in the Home UDM/UDR/MongoDB database.
+> - **Serving Network (VPLMN):** UE3 attaches via radio exclusively to `gNodeB-Visited` (Bosnia `218/90`).
+> - **Authentication & User-Plane:** The Visited AMF queries the Home AUSF/UDM via cross-PLMN Service-Based Interfaces (SBI) for 5G-AKA authentication vectors, and the Visited SMF/UPF establish Local Breakout (LBO) user-plane routing.
+> - **Rating Distinction:** UE3's rate plan is `premium-roaming` with tariff classification `roaming_vplmn` because its serving PLMN (`218/90`) differs from its home PLMN (`602/03`).
+
+```bash
+# Attach individual UEs
+sudo bash scripts/run-ue.sh ue1    # Attaches UE1 to Home AMF
+sudo bash scripts/run-ue.sh ue2    # Attaches UE2 to Home AMF
+sudo bash scripts/run-ue.sh ue3    # Roams UE3 into Visited AMF
+
+# Or attach all UEs simultaneously
+sudo bash scripts/run-ue.sh all
+```
 
 ---
 
@@ -1158,6 +1318,76 @@ The provisioned **Telecom Operations Overview** dashboard consists of **53 visua
 
 ---
 
+## 📊 Dedicated Grafana Live Validation Runbook
+
+This runbook allows an engineer to perform live operator tests in a terminal while directly observing telemetry changes across Grafana panels in real time.
+
+### 1. Dual-Terminal / Browser Workflow Setup
+
+```
+┌───────────────────────────────┐     ┌─────────────────────────────────────────────────────────┐
+│          TERMINAL 1           │     │                     WEB BROWSER                         │
+│  Start / Monitor Environment  │     │       Grafana Operations Command Center                 │
+│                               │     │       URL: http://<NODE_IP>:30300                       │
+│  $ sudo bash scripts/start... │     │       Dashboard: 5G-IMS-Lab — Telecom Operations        │
+│  $ kubectl get pods -A -w     │     │       UID: 5g-ims-telecom-overview                      │
+└───────────────────────────────┘     └─────────────────────────────────────────────────────────┘
+               │                                                   ▲
+               │                                                   │ Live Metrics Updates
+               ▼                                                   │
+┌───────────────────────────────┐                                  │
+│          TERMINAL 2           │──────────────────────────────────┘
+│  Execute Operator Scenarios   │
+│                               │
+│  $ test-ims-call.sh 1 2       │  (Domestic Call)
+│  $ test-ims-call.sh 1 3       │  (Roaming Call)
+│  $ rating-engine.py rate-cdrs │  (Rating Engine)
+└───────────────────────────────┘
+```
+
+#### Discovery & Access:
+```bash
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+echo "Open Grafana: http://${NODE_IP}:30300"
+echo "Open Prometheus: http://${NODE_IP}:30090"
+echo "Open Alertmanager: http://${NODE_IP}:30093"
+```
+
+### 2. Panel-by-Panel Telemetry Correlation Matrix
+
+| Test Scenario | Target Dashboard Panel | PromQL Metric / Query | Expected Baseline Before Test | Expected State During Test | Settled State After Teardown | Live Result |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: |
+| **UE RAN Attach** | `Section A: 5G Registered UEs` | `sum(open5gs_5gc_registered_ues)` | `0` (stopped) | `3` (attaching) | `3` (steady) | **PASS** |
+| **PDU Session Estab**| `Section A: Active PDU Sessions` | `sum(open5gs_5gc_active_pdu_sessions)` | `0` | `6` | `6` (2 per UE) | **PASS** |
+| **SIP Registration** | `Section A: IMS Registered Sub` | `ims_sip_registered_subscribers` | `0` | `3` | `3` (`ue1`, `ue2`, `ue3`)| **PASS** |
+| **Domestic Call (1->2)**| `Section E: RTP Relayed Total` | `ims_rtp_packets_relayed_total` | `N` | `N + 25..50` | `N + 50` pkts | **PASS** |
+| **Domestic Call (1->2)**| `Section G: Domestic Voice CDRs` | `charging_cdr_records_total{call_type="domestic"}` | `M` | `M` | `M + 1` CDR | **PASS** |
+| **Roaming Call (1->3)** | `Section H: Roaming Attachment` | `roaming_ue_attached_status{ue_id="ue3"}` | `1 (ATTACHED)` | `1 (ATTACHED)` | `1 (ATTACHED)` | **PASS** |
+| **Roaming Call (1->3)** | `Section G: Roaming Voice CDRs` | `charging_cdr_records_total{call_type="roaming"}` | `K` | `K` | `K + 1` CDR | **PASS** |
+| **Rating & Ledger** | `Section J: Available Balance` | `charging_account_balance_available{account_id="acc-ue3"}` | `30.00 LAB` | `29.50 LAB` (held) | `29.50 LAB` | **PASS** |
+| **Incident Health** | `Section I: Active Incidents` | `count(ALERTS{alertstate="firing"})` | `0 Firing` | `0 Firing` | `0 Firing` | **PASS** |
+
+### 3. Step-by-Step Operator Verification Procedures
+
+#### Scenario 1: Domestic Voice Call (UE1 ↔ UE2)
+1. **In Browser:** Navigate to `Section E (RTP Media)` and `Section G (Offline Charging)`. Note current `ims_rtp_packets_relayed_total` and `charging_cdr_records_total{call_type="domestic"}`.
+2. **In Terminal 2:** Run `sudo bash scripts/test-ims-call.sh 1 2`.
+3. **In Browser:** Watch `RTP Relayed Total` increase by exactly **+50 packets** (25 caller + 25 callee) with `RTP Packet Loss` remaining at **0.0%**.
+4. **In Browser:** Watch `Domestic Voice CDRs` increment by **+1**.
+
+#### Scenario 2: Inter-PLMN Roaming Voice Call (UE1 ↔ UE3 Bosnia LBO)
+1. **In Browser:** Navigate to `Section H (Multi-PLMN Roaming)` and verify `Roaming UE3 (218/90)` displays `ATTACHED (1)`.
+2. **In Terminal 2:** Run `sudo bash scripts/test-ims-call.sh 1 3`.
+3. **In Browser:** Watch `RTP Relayed Total` increase by **+50 packets** and `Roaming Voice CDRs` increment by **+1**.
+
+#### Scenario 3: Telecom Rating & Prepaid Balance Lifecycle
+1. **In Browser:** Navigate to `Section J (Telecom Rating & Revenue Management)`.
+2. **In Terminal 2:** Run `python3 scripts/rating-engine.py rate-cdrs && python3 scripts/rating-engine.py reconcile`.
+3. **In Browser:** Observe `Total Billed Revenue`, `Available Balance (acc-ue3)`, and `Reconciliation Audit Status` render `PASS (0 Anomalies)`.
+
+
+---
+
 ## Alerting & Incident Detection (Alertmanager)
 
 Alerts are declaratively defined in [`k8s/monitoring/prometheus-alert-rules.yaml`](k8s/monitoring/prometheus-alert-rules.yaml) and dispatched to **Alertmanager** (`http://<NODE_IP>:30093`):
@@ -1284,7 +1514,49 @@ curl -s http://172.19.0.2:30090/api/v1/alerts | jq .data.alerts
 curl -s http://172.19.0.2:30093/api/v2/alerts | jq .
 ```
 
-### 2. Troubleshooting Matrix
+### 2. Forensic Troubleshooting & Root Cause Recovery
+
+#### Problem A — Stale UERANSIM TUN Devices Following 5GC Perturbation
+- **Symptom:** SIP `REGISTER` or voice call returns `408 Request Timeout` or raw socket probe hangs indefinitely.
+- **Root Cause:** When 5G Core pods restart (e.g. during fault injection), the UPF drops active PFCP/GTP-U session bindings while the host-side UERANSIM processes maintain stale `uesimtun0` interfaces and network namespaces.
+- **Diagnosis:**
+  ```bash
+  # Check if UE IMS network namespace cannot ping UPF IMS gateway
+  sudo ip netns exec ueransim-602030000000001-ims-psi2 ping -c 2 10.46.0.1
+  ```
+- **Recovery:** Execute a clean UE restart cycle:
+  ```bash
+  sudo bash scripts/run-ue.sh stop
+  sudo bash scripts/run-ue.sh all
+  ```
+- **Verification:** Confirm gateway reachability: `sudo ip netns exec ueransim-602030000000001-ims-psi2 ping -c 2 10.46.0.1` (0% loss).
+
+#### Problem B — `test-ims-call.sh` Parameter Usage
+- **Symptom:** Running `test-ims-call.sh 1 2` ran default scenario or failed to parse target caller/callee.
+- **Root Cause:** Positional arguments `$1` and `$2` must be forwarded into the Python sub-shell (`python3 - "$@"`).
+- **Supported Usage:**
+  ```bash
+  # Positional numeric arguments
+  sudo bash scripts/test-ims-call.sh 1 2           # Domestic (UE1 -> UE2)
+  sudo bash scripts/test-ims-call.sh 1 3           # Roaming (UE1 -> UE3)
+  sudo bash scripts/test-ims-call.sh 3 1           # Reverse Roaming (UE3 -> UE1)
+
+  # Named scenario arguments
+  sudo bash scripts/test-ims-call.sh domestic      # UE1 -> UE2
+  sudo bash scripts/test-ims-call.sh roaming       # UE1 -> UE3
+  sudo bash scripts/test-ims-call.sh all           # All scenarios
+  ```
+
+#### Problem C — Erlang/OTP Charging Service Port Isolation (`:8085`)
+- **Symptom:** `verify-erlang-charging.sh` fails on initial balance assertion with `30.0 vs 29.5`.
+- **Root Cause:** A previously running background Erlang daemon held mutated state on TCP port `:8085`.
+- **Recovery:** Kill existing Erlang processes bound to `:8085` before running fresh suites:
+  ```bash
+  fuser -k 8085/tcp 2>/dev/null || true
+  bash scripts/verify-erlang-charging.sh
+  ```
+
+### 3. General Troubleshooting Matrix
 
 | Issue | Symptom | Probable Cause | Corrective Action |
 | :--- | :--- | :--- | :--- |
