@@ -86,6 +86,7 @@ class RatedEvent:
     total_charge: float
     currency: str
     rating_status: str       # RATED, REJECTED, INSUFFICIENT_BALANCE, DUPLICATE_IGNORED
+    usage_source: str = "kamailio_cdr"
     rejection_reason: Optional[str] = None
     rating_explanation: Optional[str] = None
     created_at: str = field(default_factory=lambda: datetime.datetime.utcnow().isoformat())

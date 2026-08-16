@@ -220,6 +220,7 @@ class RatingEngine:
             total_charge=total,
             currency=account.currency,
             rating_status="RATED",
+            usage_source=event.source or "kamailio_cdr",
             rejection_reason=None,
             rating_explanation=explanation,
             created_at=datetime.datetime.utcnow().isoformat()

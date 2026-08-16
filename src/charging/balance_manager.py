@@ -116,12 +116,13 @@ class BalanceManager:
             """, (bal_after, consumed_after, now_str, acc.id))
 
             # 5. Insert Rated Usage Record
+            usage_src = getattr(rated_event, "usage_source", None) or "kamailio_cdr"
             cur.execute("""
             INSERT OR REPLACE INTO rated_usage
             (id, usage_source, source_record_id, account_id, service_type, destination_type, tariff_id, raw_quantity, billable_units, setup_charge, duration_charge, total_charge, currency, rating_status, rejection_reason, rating_explanation, created_at)
-            VALUES (?, 'kamailio_cdr', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RATED', NULL, ?, ?);
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RATED', NULL, ?, ?);
             """, (
-                rated_event.id, rated_event.usage_id, acc.id, rated_event.service_type,
+                rated_event.id, usage_src, rated_event.usage_id, acc.id, rated_event.service_type,
                 rated_event.destination_type, rated_event.tariff_id, rated_event.raw_quantity,
                 rated_event.billable_units, rated_event.setup_charge, rated_event.duration_charge,
                 rated_event.total_charge, acc.currency, rated_event.rating_explanation, now_str
