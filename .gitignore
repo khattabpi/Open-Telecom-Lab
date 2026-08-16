@@ -47,3 +47,10 @@ node_modules/
 .terraform/
 *.tfstate
 *.tfstate.backup
+
+# ─── Erlang / rebar3 Build Artifacts ───────────────────────────
+_build/
+.rebar3/
+*.dump
+erl_crash.dump
+

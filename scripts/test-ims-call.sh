@@ -28,10 +28,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Run python engine
-python3 - "${MODE}" << 'EOF'
-import socket, re, hashlib, time, threading, sys, os, subprocess
+python3 - "$@" << 'EOF'
+import socket, re, hashlib, time, threading, sys, os, subprocess, json, urllib.request, urllib.error
 
-MODE = sys.argv[1] if len(sys.argv) > 1 else "all"
 PCSCF_IP = "10.46.0.1"
 SIP_PORT = 5060
 RTP_PORT = 10000
@@ -378,7 +377,7 @@ try:
     s.sendto(bye.encode(), ('{PCSCF_IP}', {SIP_PORT}))
     bye_resp, addr = s.recvfrom(4096)
     with open('/tmp/caller_res.txt', 'w') as f:
-        f.write(f'OK: Received {{rcv_count[0]}}/{NUM_PACKETS} RTP packets')
+        f.write(f'OK: Received {{rcv_count[0]}}/{NUM_PACKETS} RTP packets|call-run-{{call_seq}}@{caller_ip}')
 except Exception as e:
     with open('/tmp/caller_res.txt', 'w') as f:
         f.write(f'ERROR: {{e}}')
@@ -397,44 +396,157 @@ except Exception as e:
     caller_proc.wait(timeout=15.0)
     callee_proc.wait(timeout=15.0)
 
-    with open('/tmp/caller_res.txt') as f: c_res = f.read().strip()
+    with open('/tmp/caller_res.txt') as f: c_raw = f.read().strip()
     with open('/tmp/callee_res.txt') as f: k_res = f.read().strip()
+
+    call_id = f"call-{caller_key}-{callee_key}-{int(time.time())}@{caller_ip}"
+    if "|" in c_raw:
+        c_res, call_id = c_raw.split("|", 1)
+    else:
+        c_res = c_raw
+
     print(f"  Caller ({caller_key} -> {callee_key}): {c_res}")
     print(f"  Callee ({callee_key} -> {caller_key}): {k_res}")
     if not (c_res.startswith("OK") and k_res.startswith("OK")):
         print(f"  {RED}[✗] Voice call or media verification failed!{NC}")
         return False
     print(f"  {GREEN}[✓] Call dialog & Bidirectional RTP stream PASSED (25/25 packets, 0% loss){NC}")
+
+    # Invoke Erlang/OTP Telecom Charging Integration
+    process_charging_event(caller_key, callee_key, call_id, duration=10.0)
     return True
+
+def process_charging_event(caller_key, callee_key, call_id, duration=10.0):
+    # Determine target charging account and roaming context
+    # If UE3 is involved (either caller or callee in roaming scenarios), charge acc-ue3 with rate plan premium-roaming
+    if caller_key == "ue3" or callee_key == "ue3":
+        acc_id = "acc-ue3"
+        dest = "roaming_vplmn"
+        role_label = "UE3 Roaming (Bosnia 218/90, HPLMN 602/03)"
+    elif caller_key == "ue1":
+        acc_id = "acc-ue1"
+        dest = "domestic"
+        role_label = "UE1 Domestic (Egypt 602/03)"
+    elif caller_key == "ue2":
+        acc_id = "acc-ue2"
+        dest = "domestic"
+        role_label = "UE2 Domestic (Egypt 602/04)"
+    else:
+        acc_id = f"acc-{caller_key}"
+        dest = "domestic"
+        role_label = f"{caller_key.upper()} Domestic"
+
+    payload = {
+        "call_id": call_id,
+        "session_id": call_id,
+        "caller": f"sip:{caller_key}@ims.lab",
+        "callee": f"sip:{callee_key}@ims.lab",
+        "account_id": acc_id,
+        "service_type": "voice",
+        "duration": duration,
+        "destination": dest
+    }
+
+    import urllib.request, urllib.error
+    url = "http://127.0.0.1:8085/v1/charging/events"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            status = data.get("status")
+            tx_id = data.get("transaction_id", "N/A")
+            charge = data.get("total_charge", 0.0)
+            avail = data.get("available_balance", 0.0)
+            cons = data.get("consumed_balance", 0.0)
+            tariff = data.get("tariff_id", "N/A")
+            expl = data.get("explanation", "")
+            print(f"  {GREEN}[✓] Erlang/OTP Charging Engine ({acc_id} - {role_label}):{NC}")
+            print(f"      Status: {status} | Rated Charge: {charge:.4f} LAB ({tariff})")
+            print(f"      Balance Available: {avail:.4f} LAB | Consumed: {cons:.4f} LAB | Tx: {tx_id}")
+            if expl:
+                print(f"      Rating Breakdown: {expl}")
+            return True
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8")
+        print(f"  {RED}[✗] Erlang Charging HTTP {e.code}: {err_body}{NC}")
+        return False
+    except Exception as e:
+        print(f"  {YELLOW}[!] Erlang Charging Service offline on :8085 ({e}){NC}")
+        return False
+
+# Parse CLI arguments
+args = [arg.strip().lower() for arg in sys.argv[1:] if arg.strip()]
+
+def norm_ue(val):
+    v = val.replace("ue", "").replace("-", "")
+    return f"ue{v}" if v in ["1", "2", "3"] else None
+
+call_scenarios = []
+
+if not args or args[0] in ["all", "full"]:
+    call_scenarios = [
+        ("ue1", "ue2", "Domestic Call (UE1 Egypt 602/03 <-> UE2 Egypt 602/04)"),
+        ("ue1", "ue3", "Inter-PLMN Roaming Call (UE1 Egypt 602/03 <-> UE3 Bosnia 218/90)")
+    ]
+elif len(args) == 2 and norm_ue(args[0]) and norm_ue(args[1]):
+    c1, c2 = norm_ue(args[0]), norm_ue(args[1])
+    call_scenarios = [(c1, c2, f"Call ({UE_MAP[c1]['name']} ──► {UE_MAP[c2]['name']})")]
+elif args[0] in ["domestic", "ue1-ue2", "1-2", "1_2"]:
+    call_scenarios = [("ue1", "ue2", "Domestic Call (UE1 Egypt 602/03 <-> UE2 Egypt 602/04)")]
+elif args[0] in ["roaming", "ue1-ue3", "1-3", "1_3"]:
+    call_scenarios = [("ue1", "ue3", "Inter-PLMN Roaming Call (UE1 Egypt 602/03 <-> UE3 Bosnia 218/90)")]
+elif args[0] in ["reverse-roaming", "ue3-ue1", "3-1", "3_1"]:
+    call_scenarios = [("ue3", "ue1", "Reverse Roaming Call (UE3 Bosnia 218/90 <-> UE1 Egypt 602/03)")]
+elif norm_ue(args[0]) == "ue1":
+    call_scenarios = [("ue1", "ue2", "Domestic Call (UE1 Egypt 602/03 <-> UE2 Egypt 602/04)")]
+elif norm_ue(args[0]) == "ue2":
+    call_scenarios = [("ue2", "ue1", "Reverse Domestic Call (UE2 Egypt 602/04 <-> UE1 Egypt 602/03)")]
+elif norm_ue(args[0]) == "ue3":
+    call_scenarios = [("ue3", "ue1", "Reverse Roaming Call (UE3 Bosnia 218/90 <-> UE1 Egypt 602/03)")]
+else:
+    print(f"{RED}[✗] Unknown test mode or parameters: {' '.join(args)}{NC}")
+    print("Valid usage:")
+    print("  sudo bash scripts/test-ims-call.sh               # Run all test calls (Domestic + Roaming)")
+    print("  sudo bash scripts/test-ims-call.sh domestic      # Domestic call (UE1 -> UE2)")
+    print("  sudo bash scripts/test-ims-call.sh roaming       # Roaming call (UE1 -> UE3)")
+    print("  sudo bash scripts/test-ims-call.sh 1 2           # Custom call: UE1 -> UE2")
+    print("  sudo bash scripts/test-ims-call.sh 1 3           # Custom call: UE1 -> UE3")
+    print("  sudo bash scripts/test-ims-call.sh 3 1           # Custom call: UE3 -> UE1")
+    sys.exit(1)
+
+# Determine required UEs to register
+required_ues = set()
+for c1, c2, _ in call_scenarios:
+    required_ues.add(c1)
+    required_ues.add(c2)
+# If running 'all', register all 3
+if not args or args[0] in ["all", "full"]:
+    required_ues = {"ue1", "ue2", "ue3"}
 
 print(f"{BLUE}============================================================{NC}")
 print(f"{BLUE}    Open5GS 5G SA + Kamailio IMS Multi-PLMN Voice Test Suite{NC}")
 print(f"{BLUE}============================================================{NC}")
 
-print(f"\n{CYAN}[1/3] Performing SIP Digest Registrations...{NC}")
-r1 = register_ue("ue1")
-r2 = register_ue("ue2")
-r3 = register_ue("ue3")
+print(f"\n{CYAN}[1/2] Performing SIP Digest Registrations...{NC}")
+reg_ok = True
+for ue_key in sorted(required_ues):
+    if not register_ue(ue_key):
+        reg_ok = False
 
-if not (r1 and r2 and r3):
+if not reg_ok:
     print(f"{RED}[✗] Registration failed for one or more UEs.{NC}")
     sys.exit(1)
 
+print(f"\n{CYAN}[2/2] Validating SIP Signaling & RTPEngine Media Flows...{NC}")
 success = True
-
-if MODE in ["all", "ue1-ue2", "domestic"]:
-    print(f"\n{CYAN}[2/3] Validating Domestic Call (UE1 Egypt 602/03 <-> UE2 Egypt 602/04)...{NC}")
-    if not run_call("ue1", "ue2"):
-        success = False
-
-if MODE in ["all", "ue1-ue3", "roaming"]:
-    print(f"\n{CYAN}[3/3] Validating Inter-PLMN Roaming Call (UE1 Egypt 602/03 <-> UE3 Bosnia 218/90)...{NC}")
-    if not run_call("ue1", "ue3"):
-        success = False
-
-if MODE in ["ue3-ue1", "reverse-roaming"]:
-    print(f"\n{CYAN}[Extra] Validating Reverse Roaming Call (UE3 Bosnia 218/90 <-> UE1 Egypt 602/03)...{NC}")
-    if not run_call("ue3", "ue1"):
+for c1, c2, desc in call_scenarios:
+    print(f"\n{YELLOW}▶ Scenario: {desc}{NC}")
+    if not run_call(c1, c2):
         success = False
 
 print(f"\n{BLUE}============================================================{NC}")
