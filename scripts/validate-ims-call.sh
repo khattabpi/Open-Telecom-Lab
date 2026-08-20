@@ -18,6 +18,8 @@ if [ "${EUID}" -ne 0 ]; then
     exec sudo bash "$0" "$@"
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
@@ -149,8 +151,8 @@ echo ""
 
 # 5. End-to-End Call & Media Execution
 echo -e "${BOLD}5. End-to-End Multi-PLMN SIP Call & RTPEngine Media Test${NC}"
-if [ -f "scripts/test-ims-call.sh" ]; then
-    if bash scripts/test-ims-call.sh all >/tmp/validate-ims-call.log 2>&1; then
+if [ -f "${SCRIPT_DIR}/test-ims-call.sh" ]; then
+    if bash "${SCRIPT_DIR}/test-ims-call.sh" all >/tmp/validate-ims-call.log 2>&1; then
         check_pass "UE1 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
         check_pass "UE2 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
         check_pass "UE3 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
@@ -162,7 +164,7 @@ if [ -f "scripts/test-ims-call.sh" ]; then
         check_fail "End-to-End SIP call test failed. Log: /tmp/validate-ims-call.log"
     fi
 else
-    check_fail "scripts/test-ims-call.sh not found"
+    check_fail "${SCRIPT_DIR}/test-ims-call.sh not found"
 fi
 echo ""
 

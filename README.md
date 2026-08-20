@@ -1,221 +1,201 @@
-# 5G-IMS-Lab: End-to-End 5G SA, IMS Vo5G & Erlang/OTP Telecom Charging Laboratory
+![5G-IMS-Lab Banner](assets/images/banner.png)
+
+# 5G-IMS-Lab
 
 [![5G Core](https://img.shields.io/badge/5G%20Core-Open5GS%20%7C%203GPP%20Rel--16-blue?style=flat-square&logo=signal)](https://open5gs.org/)
 [![IMS Stack](https://img.shields.io/badge/IMS-Kamailio%205.7%20%7C%20Vo5G%20SIP-green?style=flat-square&logo=sip)](https://www.kamailio.org/)
 [![Media Proxy](https://img.shields.io/badge/Media-RTPEngine%20%7C%20G.711u%2Fa-orange?style=flat-square)](https://github.com/sipwise/rtpengine)
 [![Charging Engine](https://img.shields.io/badge/Charging-Erlang%2FOTP%2025%20%7C%20Cowboy-red?style=flat-square&logo=erlang)](services/charging-erlang/)
+[![Control Center GUI](https://img.shields.io/badge/Control%20Center%20GUI-Port%208088-00C7B7?style=flat-square)](services/telecom-gui/)
 [![Platform](https://img.shields.io/badge/Platform-Kubernetes%20%7C%20kind-326CE5?style=flat-square&logo=kubernetes)](k8s/)
 [![Observability](https://img.shields.io/badge/Observability-Prometheus%20%2B%20Grafana-F46800?style=flat-square&logo=grafana)](k8s/monitoring/)
-[![Tests](https://img.shields.io/badge/Automated%20Tests-194%2F194%20PASS-brightgreen?style=flat-square)](scripts/)
+[![Regression Tests](https://img.shields.io/badge/Regression%20Tests-212%2F212%20PASS-brightgreen?style=flat-square)](scripts/)
 
-An engineering-grade reference laboratory implementing a complete, integrated telecommunications service-chain: **5G Standalone Core (3GPP Rel-16) $\rightarrow$ Multi-PLMN Roaming $\rightarrow$ IMS Vo5G Signaling $\rightarrow$ RTPEngine Media Proxy $\rightarrow$ Erlang/OTP Real-Time Charging & Revenue Management $\rightarrow$ Full-Stack Observability**.
+**5G-IMS-Lab** is an engineering-grade reference laboratory showcasing a full-stack, cloud-native telecommunications service chain. This project provides a robust, fully automated environment for simulating 5G Standalone (SA) architecture, IMS Vo5G signaling, real-time Erlang-based charging, an interactive operations control center GUI, and full-stack observability.
+
+Ideal for research, education, integration testing, and proof-of-concept deployments.
+
+---
+
+## 📖 Architecture & Service Chain
+
+The laboratory integrates open-source telecommunications components deployed atop a Kubernetes (`kind`) cluster:
+
+* **5G Standalone Core (Open5GS):** Full 3GPP Rel-16 Control and User Plane (AMF, SMF, UPF, UDM, UDR, AUSF, PCF, NRF, BSF) with multi-PLMN network isolation.
+* **RAN Simulation (UERANSIM):** Dual gNodeB deployments (Home on `:38412` and Visited on `:38413`) supporting Local Breakout (LBO) roaming and concurrent dual-slice PDU sessions (Internet on `10.45.0.0/16` and IMS on `10.46.0.0/16`).
+* **IMS Service Layer (Kamailio & RTPEngine):** P-CSCF, I-CSCF, and S-CSCF nodes handling SIP Digest MD5 authentication, routing, and NAT traversal, backed by an RTPEngine media proxy for bidirectional G.711 PCMU voice streams.
+* **Charging & Revenue (Erlang/OTP):** Soft-real-time prepaid charging engine exposing a Cowboy REST API (`:8085`), featuring an immutable double-entry ledger, multi-bucket balances, and voice/data rating algorithms.
+* **Control Center GUI (`:8088`):** Modern, minimalistic light management dashboard with an interactive End-to-End Service Chain Visualizer, Multi-PLMN subscriber manager, interactive call execution, and automated reconciliation audits.
+* **Observability Stack:** Comprehensive monitoring using Prometheus (metrics scraping), Grafana (53-panel dashboard), and Alertmanager for real-time service assurance and KPI tracking.
 
 ![5G-IMS-Lab Architecture](docs/images/5g-ims-lab-architecture.png)
 
 ---
 
-## 1. Project Overview
+## 📱 RAN Simulation & Multi-UE Registration
 
-`5G-IMS-Lab` demonstrates an end-to-end cloud-native telecommunications pipeline where real host-side radio interfaces attach to a containerized 5G core, register with an IP Multimedia Subsystem (IMS) using SIP Digest MD5 authentication, stream bidirectional RTP voice media, and trigger real-time rating, credit reservations, and double-entry transaction ledgering in an Erlang/OTP charging engine.
+The laboratory emulates isolated radio environments with independent gNodeB instances connected to dedicated AMFs via SCTP N2 associations:
 
-- **5G SA Core (Open5GS on Kubernetes):** Complete control and user plane NFs (AMF, SMF, UPF, PCF, UDM, UDR, AUSF, NRF, BSF) supporting dual PDU sessions (Internet + IMS).
-- **Multi-PLMN Roaming & Radio Isolation:** Isolated home (`602/03`, `602/04`) and visited (`218/90`) gNodeBs and AMFs with Local Breakout (LBO) user plane routing.
-- **IMS / Vo5G Layer (Kamailio & RTPEngine):** P-CSCF, I-CSCF, and S-CSCF handling SIP Digest MD5 authentication, ISC routing, and SDP-rewritten RTP proxying.
-- **Erlang/OTP Charging Service (Cowboy `:8085`):** Soft real-time rating engine, multi-bucket balances, credit reservations, double-entry ledger, single-charge idempotency, and financial reconciliation.
-- **Full-Stack Observability:** Custom Prometheus exporter (`:9100`), 53-panel Grafana Operations Center (`:30300`), and Alertmanager incident detection (`:30093`).
+* **gNodeB-Home (`127.0.0.1:38412`):** Serves Home PLMNs `602/03` (UE1) and `602/04` (UE2).
+* **gNodeB-Visited (`127.0.0.2:38413`):** Serves Visited PLMN `218/90` (UE3 In-Roaming).
 
----
+Each subscriber authenticates via 5G-AKA and establishes dual PDU sessions into isolated Linux network namespaces:
 
-## 2. Architecture & Network Design
+| Subscriber | IMSI | PLMN Role | Rate Plan | Internet Slice (`SST:1`) | IMS Slice (`SST:1`) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **UE1** | `602030000000001` | Egypt `602/03` (Home) | `standard-prepaid` | `10.45.0.10` | `10.46.0.10` |
+| **UE2** | `602040000000002` | Egypt `602/04` (Home) | `standard-prepaid` | `10.45.0.11` | `10.46.0.11` |
+| **UE3** | `602030000000003` | Bosnia `218/90` (Roaming) | `premium-roaming` | `10.45.0.100` | `10.46.0.100` |
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                           5G-IMS-Lab Architecture                                               │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- [ UERANSIM UEs ] ──► [ Dual gNodeB RAN ] ──► [ Open5GS 5G Core ] ──► [ UPF IMS Bearer ] ──► [ Kamailio IMS Core ]
-   • UE1 (602/03)       • Home :38412           • Home AMF/SMF/UPF      • 10.46.0.1:5060       • P-CSCF / S-CSCF
-   • UE2 (602/04)       • Visited :38413        • Visited AMF/SMF/UPF                          • RTPEngine (:22222)
-   • UE3 (218/90 Roam)                          (Local Breakout LBO)                                   │
-                                                                                                       │ Call Completed
-                                                                                                       ▼
- [ Observability ] ◄── [ Reconciliation ] ◄── [ Double-Entry Ledger ] ◄── [ Rating Engine ] ◄── [ Erlang Charging ]
-   • Prometheus          • Equity Invariant      • Immutable Journal       • 3GPP CEIL Math      • Cowboy REST :8085
-   • Grafana (:30300)    • Cash Conservation     • Single-Charge Guard     • Roaming Tariffs     • gen_server State
-```
-
-### Multi-PLMN Design Matrix
-
-| Subscriber | IMSI / Identity | Home PLMN | Serving PLMN | Radio Domain | Rate Plan | Initial Balance |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **UE1** | `602030000000001` | `602/03` (Egypt) | `602/03` (Home) | `gNodeB-Home` | `standard-prepaid` | `50.0000 LAB` |
-| **UE2** | `602040000000002` | `602/04` (Egypt) | `602/04` (Home) | `gNodeB-Home` | `standard-prepaid` | `25.0000 LAB` |
-| **UE3** | `602030000000003` | `602/03` (Egypt) | `218/90` (Visited) | `gNodeB-Visited` | `premium-roaming` | `30.0000 LAB` |
-
-> [!NOTE]
-> **UE3 Roaming Architecture:** UE3 is an authentic inbound roamer. Its 5G-AKA credentials reside in the Home UDM/MongoDB database (`602/03`), but its radio interface connects to the Visited gNodeB (`218/90`). The charging engine evaluates $\text{Serving PLMN } (218/90) \neq \text{Home PLMN } (602/03)$ to classify calls as `roaming_vplmn`.
+![UE1 Registration Log](docs/images/ue1-registration-log.png)
+![UE2 Registration Log](docs/images/ue2-registration-log.png)
 
 ---
 
-## 3. End-to-End Call & Charging Flow
+## 📞 IMS Vo5G Signaling & Media Flows
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Caller as UE1 (Egypt 602/03)
-    participant IMS as Kamailio IMS & RTPEngine
-    actor Callee as UE3 (Bosnia 218/90 Roamer)
-    participant Chg as Erlang/OTP Charging (:8085)
+Kamailio S-CSCF performs SIP Digest MD5 challenge-response authentication for all registered subscribers. Voice sessions traverse RTPEngine with SDP offer/answer rewriting to ensure zero packet loss across isolated network namespaces.
 
-    Caller->>IMS: SIP INVITE (SDP Offer)
-    IMS->>Callee: INVITE (SDP Rewritten to RTPEngine 10.46.0.1)
-    Callee-->>IMS: 180 Ringing
-    IMS-->>Caller: 180 Ringing
-    Callee-->>IMS: 200 OK (SDP Answer)
-    IMS-->>Caller: 200 OK (SDP Rewritten)
-    Caller->>IMS: ACK
-    IMS->>Callee: ACK
-
-    rect rgb(235, 248, 235)
-        Note over Caller, Callee: Bidirectional RTP Voice Media Flow (25/25 Packets, 0% Loss, 4.40 MOS)
-        Caller->>IMS: 25 RTP Packets (G.711u / PCMU)
-        Callee->>IMS: 25 RTP Packets (G.711u / PCMU)
-    end
-
-    Caller->>IMS: SIP BYE
-    IMS->>Callee: SIP BYE
-    Callee-->>IMS: 200 OK
-    IMS-->>Caller: 200 OK
-
-    rect rgb(240, 244, 255)
-        Note over Caller, Chg: Real-Time Telecom Charging Event Trigger
-        Caller->>Chg: POST /v1/charging/events (Call-ID, Duration=10s, acc-ue3)
-        Chg->>Chg: Single-Charge Idempotency Check (Verify Call-ID not previously debited)
-        Chg->>Chg: Destination Classification (HPLMN 602/03 != VPLMN 218/90 -> roaming_vplmn)
-        Chg->>Chg: Rate Usage (tariff-premium-roaming-voice: 0.10 setup + 10s * 0.04 = 0.5000 LAB)
-        Chg->>Chg: Ledger Mutation (Available: 30.0 -> 29.5 LAB, Consumed: 0.0 -> 0.5 LAB)
-        Chg-->>Caller: HTTP 200 OK (status: CHARGED, tx_id: tx-call-8)
-    end
-```
+![SIP Call Flow](docs/images/sip-call-flow.png)
+![RTP Media Flow](docs/images/rtp-media.png)
 
 ---
 
-## 4. Telecom Rating & Revenue Model
+## 💰 Erlang/OTP Revenue & Real-Time Charging
 
-The Erlang/OTP charging service implements double-entry multi-bucket balance management:
-- **`balance_available`**: Liquid credit available for call reservations and usage debits.
-- **`balance_reserved`**: Funds locked in-flight during active calls.
-- **`balance_consumed`**: Cumulative rated charges finalized on completed calls.
+The laboratory features a soft-real-time Charging Function (CHF) built with Erlang/OTP 25 and Cowboy:
 
-### Roaming Voice Call Rating Lifecycle (`acc-ue3`):
-```text
-Subscriber:    UE3 Roaming (HPLMN: 602/03, VPLMN: 218/90)
-Rate Plan:     premium-roaming
-Tariff:        tariff-premium-roaming-voice (0.1000 LAB setup + 0.0400 LAB/sec)
-Call Duration: 10.0 seconds (10 CEIL billable units)
+* **Deterministic Tariffs:** Domestic voice ($0.05\text{ setup} + 0.02/\text{s}$), Roaming voice ($0.10\text{ setup} + 0.04/\text{s}$), and Data ($0.01/\text{MB}$).
+* **ACID Double-Entry Ledger:** Audit trail tracking `TOPUP`, `CHARGE`, `RESERVE`, `CONSUME`, and `RELEASE` operations.
+* **Automated Reconciliation:** Invariant verification ensuring $\sum \text{Balances} = \text{Total Top-Ups} - \text{Total Consumed}$ ($PASS$, $0\text{ anomalies}$).
 
-Rated Charge:  0.1000 + (10 × 0.0400) = 0.5000 LAB
-
-Before Call:   Available = 30.0000 LAB | Consumed = 0.0000 LAB | Transactions = 1
-After Call:    Available = 29.5000 LAB | Consumed = 0.5000 LAB | Transactions = 2
-```
-
-### Accounting Invariants & Idempotency:
-1. **Account Equity:** $\text{Available} + \text{Reserved} = \sum \text{Ledger Transactions}$ (Variance $= 0.0000$).
-2. **Cash Conservation:** $\text{Total Available } (104.52) + \text{Total Consumed } (0.50) \equiv \text{Total Topups } (105.02\text{ LAB})$.
-3. **Single-Charge Idempotency:** Duplicate Call-IDs return `status: EXISTING` with zero secondary debiting.
-
----
-
-## 5. Key Verification Evidence
-
-| Subsystem | Verified Capability | Evidence / Metrics | Status |
-| :--- | :--- | :--- | :---: |
-| **5G Core Control Plane** | Dual PLMN Registration | `open5gs_5gc_registered_ues`: 3 UEs (Home: 2, Visited: 1) | **`PASS`** |
-| **5G Core User Plane** | Dual PDU Sessions per UE | `open5gs_5gc_active_pdu_sessions`: 6 sessions (Internet + IMS) | **`PASS`** |
-| **IMS SIP Signaling** | Digest MD5 Registration | `ims_sip_registered_subscribers`: 3 AoRs (`ue1`, `ue2`, `ue3`) | **`PASS`** |
-| **RTPEngine Media** | Bidirectional Audio Stream | 25/25 RTP packets sent & received in both directions (0% loss) | **`PASS`** |
-| **Voice Quality (QoE)** | Mean Opinion Score | `qoe_telecom_mos_estimated`: 4.40 / 4.50 (ITU-T E-Model) | **`PASS`** |
-| **Erlang Rating Engine** | Deterministic Tariff Math | $0.5000\text{ LAB}$ rated for 10s roaming call (`premium-roaming`) | **`PASS`** |
-| **Ledger & Accounting** | Balance Debit & Journaling | `acc-ue3`: $30.00 \rightarrow 29.50\text{ LAB}$, immutable `tx-call-*` logged | **`PASS`** |
-| **Idempotency** | Duplicate Event Protection | Repeated Call-ID returns `status: EXISTING`, 0 balance change | **`PASS`** |
-| **Reconciliation Audit** | Mathematical Conservation | `/v1/reconciliation`: `status: PASS`, **0 anomalies** across 4 accounts | **`PASS`** |
-| **OTP Supervision Tree** | Worker Fault Recovery | Supervisor restarts crashed worker in $<100\text{ms}$ with zero downtime | **`PASS`** |
-
-**Consolidated Test Gate:** **`29 / 29` Erlang EUnit Tests** and **`194 / 194` System Verification Tests PASS (100% Green)**.
-
----
-
-## 6. Observability (Prometheus & Grafana)
-
-The laboratory provisions a complete observability stack with a dedicated 53-panel Grafana Operations Center (`http://<NODE_IP>:30300`, UID: `5g-ims-telecom-overview`):
-
-![Grafana Telecom Operations Overview](docs/images/grafana-dashboard-overview.png)
-
-- **Prometheus Telemetry (`:30090`):** Scrapes 5G Core NFs, Kamailio USRLOC dialogs, RTPEngine sockets, CDR counters, and Erlang charging balances.
-- **Alertmanager (`:30093`):** 7 rule groups tracking NF readiness, PDU session drops, MOS degradation, and roaming attachment failures.
-
----
-
-## 7. Quick Start & Operational Validation
-
-### 1. Start Charging Daemon & Verify Infrastructure
 ```bash
-# Start detached Erlang charging service
-bash scripts/run-erlang-charging.sh start
+# Query balance for UE1
+curl -s http://127.0.0.1:8085/v1/accounts/acc-ue1/balance | jq .
 
-# Discover Kubernetes Node IP
-NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-echo "Grafana Dashboard: http://${NODE_IP}:30300"
-```
+# Query full double-entry transaction ledger
+curl -s http://127.0.0.1:8085/v1/accounts/acc-ue1/transactions | jq .
 
-### 2. Attach RAN & UEs
-```bash
-sudo bash scripts/run-gnb.sh all
-sudo bash scripts/run-ue.sh all
-```
-
-### 3. Execute IMS Call & Live Charging Validation
-```bash
-# Execute Inter-PLMN Roaming Voice Call (UE1 Egypt -> UE3 Bosnia Roaming)
-sudo bash scripts/test-ims-call.sh 1 3
-
-# Query updated subscriber balance
-curl -s http://127.0.0.1:8085/v1/accounts/acc-ue3/balance | jq .
-
-# Inspect transaction ledger
-curl -s http://127.0.0.1:8085/v1/accounts/acc-ue3/transactions | jq .
-
-# Run financial reconciliation audit
+# Run live financial reconciliation audit
 curl -s http://127.0.0.1:8085/v1/reconciliation | jq .
 ```
 
-### 4. Run Consolidated Regression Suite
+![Charging CLI Validation](docs/images/charging-cli-validation.png)
+
+---
+
+## 📊 Operations Dashboards & Control Center
+
+Access the user interfaces directly in your browser:
+
+* **Telecom Control Center GUI:** [http://127.0.0.1:8088](http://127.0.0.1:8088)
+  *(Minimalist light interface, interactive service chain visualizer, live call execution, and Erlang ledger)*
+* **Grafana Operations Dashboard:** [http://172.19.0.2:30300](http://172.19.0.2:30300)
+  *(53 pre-configured telecom metric panels across Sections A–J)*
+* **Prometheus Target Status:** [http://172.19.0.2:30090/targets](http://172.19.0.2:30090/targets)
+* **Alertmanager Notifications:** [http://172.19.0.2:30093](http://172.19.0.2:30093)
+
+![Grafana Dashboard Overview](docs/images/grafana-dashboard-overview.png)
+![Grafana Telemetry KPIs](docs/images/grafana-telemetry-kpis.png)
+
+---
+
+## 📦 Prerequisites
+
+Ensure your host environment meets the following requirements before deploying:
+
+| Tool | Minimum Version | Note |
+| :--- | :--- | :--- |
+| **Docker** | 20.10+ | Required for `kind` |
+| **kubectl** | 1.27+ | Cluster interaction |
+| **kind** | 0.22+ | Kubernetes-in-Docker |
+| **Python** | 3.9+ | For GUI and test validation scripts |
+| **Erlang/OTP** | 25+ | Required for the charging engine |
+| **jq / curl / bash** | — | Standard Linux utilities |
+
+---
+
+## 🚀 Quick Start
+
+Spinning up the complete environment is fully automated:
+
 ```bash
-bash scripts/verify-erlang-charging.sh   # 24 Erlang / OTP charging tests
-sudo bash scripts/verify-lab.sh          # 91 5G Core, IMS, Roaming & QoS tests
+# 1. Clone the repository
+git clone https://github.com/khattabpi/Open-Telecom-Lab.git 5G-IMS-Lab
+cd 5G-IMS-Lab
+
+# 2. Start the Erlang charging service (runs in detached mode on port 8085)
+bash scripts/run-erlang-charging.sh start
+
+# 3. Bootstrap the 5G Core, IMS, and Observability cluster
+# Handles kernel networking (ip_forward, rp_filter), Kind cluster creation,
+# Kubernetes manifests application, and MongoDB subscriber provisioning.
+sudo bash scripts/start-lab.sh
+
+# 4. Launch the RAN (gNodeBs) and UEs (User Equipment)
+sudo bash scripts/run-gnb.sh all
+sudo bash scripts/run-ue.sh all
+
+# 5. Launch the Telecom Operations & Revenue Control Center GUI (port 8088)
+bash scripts/run-gui.sh start
 ```
 
 ---
 
-## 8. Safety, Idempotency & Error Handling
+## 🧪 Automated Testing & Verification
 
-- **Duplicate Call-ID:** Returns `HTTP 200` with `status: EXISTING` and prevents double-debiting.
-- **Insufficient Balance:** Returns `HTTP 402 Payment Required` without corrupting account balances.
-- **Unknown Subscriber:** Returns `HTTP 404 Not Found`.
-- **Malformed Input:** Returns `HTTP 400 Bad Request`.
-- **Process Crash:** OTP supervisor (`charging_service_sup`) automatically restarts worker state.
+The project ships with a comprehensive regression test suite (**212 / 212 tests passing**) validating every layer of the architecture:
+
+![Verify Lab Output](docs/images/verify-lab-output.png)
+
+### 1. Master Verification Suite (91 Tests)
+Validates all 11 domains (K8s pods, PFCP/GTP interfaces, MongoDB subscribers, UE netns connectivity, Inter-PLMN roaming SIP calls, and QoS/Assurance KPIs):
+
+```bash
+sudo bash scripts/verify-lab.sh
+```
+
+### 2. Standalone IMS & SIP Call Testing
+Trigger Multi-PLMN SIP call tests (Domestic UE1 ↔ UE2 and Roaming UE1 ↔ UE3) and verify RTP streams:
+
+```bash
+sudo bash scripts/test-ims-call.sh all
+```
+
+### 3. Subsystem Validation Suites
+
+* **Telecom Control Center GUI:** `bash scripts/verify-gui.sh` (18/18 Tests)
+* **Erlang Charging Engine & Parity:** `bash scripts/verify-erlang-charging.sh` (24/24 Tests)
+* **Python Rating Engine:** `bash scripts/verify-rating.sh` (23/23 Tests)
+* **Grafana Dashboards:** `bash scripts/verify-grafana.sh` (18/18 Tests)
+* **Prometheus & Alerting:** `bash scripts/verify-alerting.sh` (19/19 Tests)
+* **Metrics Exporters:** `bash scripts/verify-observability.sh` (19/19 Tests)
 
 ---
 
-## 9. Architecture Boundaries & Future Evolution
+## 🧹 Teardown
 
-- **State Persistence:** Current charging state is held in OTP `gen_server` memory state records. Future cloud-native evolution includes Mnesia distributed storage and external SQL persistence.
-- **Charging Trigger:** The validation harness notifies the Erlang service via REST on call completion. Future phases will integrate 3GPP Diameter Ro / Nchf Converged Charging interfaces directly into Kamailio.
+To cleanly stop the laboratory, remove the Kubernetes cluster, and halt background services:
+
+```bash
+# Stop Control Center GUI
+bash scripts/run-gui.sh stop
+
+# Stop UEs and gNodeBs
+sudo bash scripts/run-ue.sh stop
+sudo bash scripts/run-gnb.sh stop
+
+# Stop the Erlang charging engine
+bash scripts/run-erlang-charging.sh stop
+
+# Destroy the Kubernetes cluster
+kind delete cluster --name open5gs-cluster
+```
 
 ---
 
-## 10. Summary
+## 🤝 Contributing & Licensing
 
-`5G-IMS-Lab` demonstrates an authentic, reproducible telecommunications pipeline:
+Contributions are welcome! Please review `CONTRIBUTING.md` and `ROADMAP.md` for planned features.
 
-$$\mathbf{5G\ SA} \longrightarrow \mathbf{Multi\text{-}PLMN\ Roaming} \longrightarrow \mathbf{IMS\ Vo5G} \longrightarrow \mathbf{RTPEngine\ Media} \longrightarrow \mathbf{Erlang/OTP\ Charging} \longrightarrow \mathbf{Reconciliation} \longrightarrow \mathbf{Observability}$$
+This project is licensed under the **MIT License**. See [`LICENSE`](LICENSE) for details.

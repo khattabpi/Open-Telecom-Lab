@@ -16,6 +16,13 @@
 
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+if [ "${EUID}" -ne 0 ]; then
+    exec sudo bash "$0" "$@"
+fi
+
 # Text formatting
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -467,8 +474,8 @@ echo ""
 # ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}9. Phase 3 IMS Roaming & Multi-PLMN Voice Call Verification${NC}"
 
-if [ -f "scripts/test-ims-call.sh" ]; then
-    if bash scripts/test-ims-call.sh all >/tmp/test-ims-call-summary.log 2>&1; then
+if [ -f "${SCRIPT_DIR}/test-ims-call.sh" ]; then
+    if bash "${SCRIPT_DIR}/test-ims-call.sh" all >/tmp/test-ims-call-summary.log 2>&1; then
         check_pass "[IMS-ROAM-01] UE3 IMS PDU Bearer Reachable (10.46.0.100 <-> 10.46.0.1)"
         check_pass "[IMS-ROAM-02] UE3 SIP Digest MD5 Registration: Authenticated & Registered (200 OK)"
         check_pass "[IMS-ROAM-03] UE3 IMS Authentication Authority (S-CSCF Digest MD5 challenge-response)"
@@ -561,7 +568,7 @@ else
 fi
 
 # Check Charging Records Collector Script
-if [ -f "scripts/collect-charging-records.sh" ] && bash scripts/collect-charging-records.sh --json &>/dev/null; then
+if [ -f "${SCRIPT_DIR}/collect-charging-records.sh" ] && bash "${SCRIPT_DIR}/collect-charging-records.sh" --json &>/dev/null; then
     check_pass "[CHG-07] Charging Records Collector Script (scripts/collect-charging-records.sh operational)"
 else
     check_fail "[CHG-07] scripts/collect-charging-records.sh execution failed"
@@ -573,8 +580,8 @@ echo ""
 # ─────────────────────────────────────────────────────────────────
 echo -e "${BOLD}11. Phase 4 Service Assurance & Real-Time KPI Engine${NC}"
 
-if [ -f "scripts/measure-kpis.sh" ]; then
-    KPI_JSON=$(bash scripts/measure-kpis.sh --json 2>/dev/null || echo "[]")
+if [ -f "${SCRIPT_DIR}/measure-kpis.sh" ]; then
+    KPI_JSON=$(bash "${SCRIPT_DIR}/measure-kpis.sh" --json 2>/dev/null || echo "[]")
 
     if python3 -c "
 import json, sys
@@ -680,7 +687,7 @@ assert roam is not None and roam['overall_status'] == 'PASS'
         check_fail "[ASSUR-10] Roaming Service Assurance report generation failed"
     fi
 else
-    check_warn "scripts/measure-kpis.sh not found"
+    check_warn "${SCRIPT_DIR}/measure-kpis.sh not found"
 fi
 echo ""
 
