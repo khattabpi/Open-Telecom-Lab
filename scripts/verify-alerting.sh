@@ -42,6 +42,9 @@ PROM_URL="http://172.19.0.2:30090"
 AM_URL="http://172.19.0.2:30093"
 GRAFANA_URL="http://172.19.0.2:30300"
 
+# Safety trap: restore open5gs-bsf if script is interrupted during fault injection
+trap 'kubectl -n open5gs scale deployment/open5gs-bsf --replicas=1 >/dev/null 2>&1' EXIT INT TERM
+
 function check_pass() {
     local test_name="$1"
     local details="$2"

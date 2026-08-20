@@ -17,6 +17,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+if [ "${EUID}" -ne 0 ]; then
+    exec sudo bash "$0" "$@"
+fi
+
 GNB_HOME_CONFIG="${REPO_ROOT}/configs/ueransim/open5gs-gnb-home.yaml"
 [ ! -f "${GNB_HOME_CONFIG}" ] && GNB_HOME_CONFIG="${REPO_ROOT}/configs/ueransim/gnb-home.yaml"
 

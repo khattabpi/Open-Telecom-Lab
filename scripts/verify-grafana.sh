@@ -157,7 +157,7 @@ echo -e "\n${CYAN}4. Telemetry Metrics Availability via Grafana Proxy${NC}"
 
 function query_grafana_proxy() {
     local expr="$1"
-    curl -G -s "${GRAFANA_URL}/api/datasources/proxy/1/api/v1/query" --data-urlencode "query=${expr}" || echo ""
+    curl -G -s "${GRAFANA_URL}/api/datasources/proxy/${PROM_ID}/api/v1/query" --data-urlencode "query=${expr}" || echo ""
 }
 
 # General metrics query check
