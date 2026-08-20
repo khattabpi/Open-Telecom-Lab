@@ -95,6 +95,10 @@ Access the user interfaces directly in your browser:
 * **Prometheus Target Status:** [http://172.19.0.2:30090/targets](http://172.19.0.2:30090/targets)
 * **Alertmanager Notifications:** [http://172.19.0.2:30093](http://172.19.0.2:30093)
 
+### Telecom Control Center Interface
+![Telecom Control Center GUI](docs/images/telecom-control-center-gui.png)
+
+### Grafana Telemetry & Observability
 ![Grafana Dashboard Overview](docs/images/grafana-dashboard-overview.png)
 ![Grafana Telemetry KPIs](docs/images/grafana-telemetry-kpis.png)
 
