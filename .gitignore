@@ -54,3 +54,4 @@ _build/
 *.dump
 erl_crash.dump
 
+external/

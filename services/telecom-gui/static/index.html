@@ -10,485 +10,507 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- Top Navigation Bar -->
-  <header class="navbar">
-    <div class="nav-brand">
+
+  <!-- ================================================================= -->
+  <!-- GREEN SIDEBAR — Navigation, System Status, Quick Actions          -->
+  <!-- ================================================================= -->
+  <aside class="sidebar">
+
+    <!-- Brand -->
+    <div class="sidebar-brand">
       <span class="logo-badge">5G SA</span>
-      <div class="brand-text">
-        <h1>Telecom Operations & Revenue Control Center</h1>
-        <div class="brand-sub">
-          <span class="status-dot"></span>
-          <span>Open5GS Core</span> • <span>Kamailio IMS</span> • <span>Erlang/OTP Charging</span> • <span>Multi-PLMN</span>
-        </div>
+      <h1>Telecom Operations &amp; Revenue Control Center</h1>
+      <div class="brand-sub">
+        <span class="status-dot"></span>
+        <span>Open5GS</span> · <span>Kamailio IMS</span> · <span>Erlang/OTP</span>
       </div>
     </div>
 
-    <nav class="nav-tabs">
-      <button class="nav-tab active" data-tab="overview">Overview</button>
-      <button class="nav-tab" data-tab="subscribers">Subscribers & Slices</button>
-      <button class="nav-tab" data-tab="calls">IMS Calls & Media</button>
-      <button class="nav-tab" data-tab="charging">Revenue & Charging</button>
-      <button class="nav-tab" data-tab="topology">Network Topology</button>
+    <!-- Navigation -->
+    <nav class="sidebar-nav">
+      <div class="nav-tabs">
+        <button class="nav-tab active" data-tab="overview">
+          <img src="icons/activity.svg" class="nav-icon" alt="">
+          Overview
+        </button>
+        <button class="nav-tab" data-tab="subscribers">
+          <img src="icons/users.svg" class="nav-icon" alt="">
+          Subscribers &amp; Slices
+        </button>
+        <button class="nav-tab" data-tab="calls">
+          <img src="icons/phone.svg" class="nav-icon" alt="">
+          IMS Calls &amp; Media
+        </button>
+        <button class="nav-tab" data-tab="charging">
+          <img src="icons/currency-dollar.svg" class="nav-icon" alt="">
+          Revenue &amp; Charging
+        </button>
+        <button class="nav-tab" data-tab="topology">
+          <img src="icons/globe.svg" class="nav-icon" alt="">
+          Network Topology
+        </button>
+      </div>
     </nav>
 
-    <div class="nav-actions">
-      <div class="refresh-control">
-        <label for="refresh-select">Auto-Refresh:</label>
+    <!-- System Status -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">System Status</div>
+      <div class="sidebar-status-list">
+        <div class="status-row">
+          <span class="s-dot"></span>
+          <span class="s-label">5GC NFs</span>
+          <span class="s-value" id="ticker-nfs">12/12 Online</span>
+        </div>
+        <div class="status-row">
+          <span class="s-dot"></span>
+          <span class="s-label">Active UEs</span>
+          <span class="s-value" id="ticker-ues">3/3 (1 Roaming)</span>
+        </div>
+        <div class="status-row">
+          <span class="s-dot"></span>
+          <span class="s-label">IMS Voice</span>
+          <span class="s-value" id="ticker-ims">P/I/S-CSCF UP</span>
+        </div>
+        <div class="status-row">
+          <span class="s-dot"></span>
+          <span class="s-label">Charging</span>
+          <span class="s-value" id="ticker-charging">Port :8085 Active</span>
+        </div>
+        <div class="status-row">
+          <span class="s-dot"></span>
+          <span class="s-label">Audit</span>
+          <span class="s-value" id="ticker-audit">PASS</span>
+        </div>
+        <div class="status-row">
+          <span class="s-dot"></span>
+          <span class="s-label">QoE MOS</span>
+          <span class="s-value" id="ticker-mos">4.41 (Excellent)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="sidebar-actions">
+      <button id="btn-quick-call" class="sidebar-btn-primary">Trigger IMS Call</button>
+      <div class="sidebar-refresh-row">
         <select id="refresh-select" class="select-input">
-          <option value="3000" selected>3s</option>
-          <option value="5000">5s</option>
-          <option value="10000">10s</option>
+          <option value="3000" selected>Auto: 3s</option>
+          <option value="5000">Auto: 5s</option>
+          <option value="10000">Auto: 10s</option>
           <option value="0">Off</option>
         </select>
+        <button id="btn-manual-refresh" class="btn-refresh" title="Refresh Now">Refresh</button>
       </div>
-      <button id="btn-manual-refresh" class="btn btn-secondary" title="Refresh Now">Refresh</button>
-      <button id="btn-quick-call" class="btn btn-primary">Trigger IMS Call</button>
     </div>
-  </header>
 
-  <!-- Live Status Bar -->
-  <div class="live-ticker">
-    <div class="ticker-item">
-      <span class="ticker-label">5GC NFs:</span>
-      <span id="ticker-nfs" class="badge badge-success">12/12 Online</span>
-    </div>
-    <div class="ticker-item">
-      <span class="ticker-label">Active UEs:</span>
-      <span id="ticker-ues" class="badge badge-neutral">3/3 Attached (1 Roaming)</span>
-    </div>
-    <div class="ticker-item">
-      <span class="ticker-label">IMS Voice:</span>
-      <span id="ticker-ims" class="badge badge-success">P/I/S-CSCF + RTPEngine UP</span>
-    </div>
-    <div class="ticker-item">
-      <span class="ticker-label">Erlang Charging:</span>
-      <span id="ticker-charging" class="badge badge-success">Port :8085 Active</span>
-    </div>
-    <div class="ticker-item">
-      <span class="ticker-label">Ledger Audit:</span>
-      <span id="ticker-audit" class="badge badge-success">RECONCILIATION: PASS</span>
-    </div>
-    <div class="ticker-item">
-      <span class="ticker-label">Voice QoE MOS:</span>
-      <span id="ticker-mos" class="badge badge-success">4.41 (Excellent)</span>
-    </div>
-  </div>
+  </aside>
 
-  <!-- Main Container -->
-  <main class="main-container">
+  <!-- ================================================================= -->
+  <!-- MAIN CONTENT AREA                                                 -->
+  <!-- ================================================================= -->
+  <div class="main-wrapper">
+    <main class="main-container">
 
-    <!-- ================================================================= -->
-    <!-- VIEW 1: OVERVIEW -->
-    <!-- ================================================================= -->
-    <section id="view-overview" class="view-panel active">
-      
-      <!-- Interactive End-to-End Telecom Visualizer Banner -->
-      <div class="card visualizer-card">
-        <div class="card-header">
-          <div class="header-left">
-            <h3>End-to-End Service Chain Architecture</h3>
-            <p class="subtitle">Data-flow pipeline from UERANSIM to Erlang/OTP ledger reconciliation</p>
+      <!-- ============================================================= -->
+      <!-- VIEW 1: OVERVIEW                                              -->
+      <!-- ============================================================= -->
+      <section id="view-overview" class="view-panel active">
+
+        <!-- Service Chain Pipeline — Signature Element -->
+        <div class="card visualizer-card">
+          <div class="card-header">
+            <div class="header-left">
+              <h3>End-to-End Service Chain</h3>
+              <p class="subtitle">Data-flow pipeline from UERANSIM to Erlang/OTP ledger reconciliation</p>
+            </div>
+            <span class="badge badge-neutral">Interactive Visualizer</span>
           </div>
-          <span class="badge badge-neutral">Interactive Visualizer</span>
-        </div>
-        <div class="card-body">
-          <div class="pipeline-container" id="telecom-pipeline">
-            <!-- Rendered by visualizer.js -->
+          <div class="card-body">
+            <div class="pipeline-container" id="telecom-pipeline">
+              <!-- Rendered by visualizer.js -->
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Top Metric KPI Cards Grid -->
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <span class="kpi-title">5G SA Core Status</span>
-          <div class="kpi-value" id="kpi-5gc-status">12/12 NFs</div>
-          <div class="kpi-subtext" id="kpi-5gc-sub">Home (602/03) & Visited (218/90)</div>
+        <!-- KPI Strip -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-title">5G SA Core Status</span>
+            <div class="kpi-value" id="kpi-5gc-status">12/12 NFs</div>
+            <div class="kpi-subtext" id="kpi-5gc-sub">Home (602/03) &amp; Visited (218/90)</div>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-title">Registered SIMs</span>
+            <div class="kpi-value" id="kpi-ues-count">3 UEs</div>
+            <div class="kpi-subtext">2 Domestic + 1 Roaming (LBO)</div>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-title">Total Consumed Revenue</span>
+            <div class="kpi-value text-green" id="kpi-revenue-consumed">0.00 LAB</div>
+            <div class="kpi-subtext" id="kpi-revenue-avail">Avail: 0.00 LAB • 4 Accounts</div>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-title">Service Assurance (QoE)</span>
+            <div class="kpi-value" id="kpi-qoe-mos">4.41 MOS</div>
+            <div class="kpi-subtext" id="kpi-qoe-stats">CSSR: 100% • Jitter: &lt; 0.5ms</div>
+          </div>
         </div>
 
-        <div class="kpi-card">
-          <span class="kpi-title">Registered SIMs</span>
-          <div class="kpi-value" id="kpi-ues-count">3 UEs</div>
-          <div class="kpi-subtext">2 Domestic + 1 Roaming (LBO)</div>
+        <!-- Network Health + Recent Calls -->
+        <div class="two-col-grid">
+          <div class="card">
+            <div class="card-header">
+              <h3>Network Functions &amp; Gateways</h3>
+              <span class="badge badge-success" id="nf-badge">All Healthy</span>
+            </div>
+            <div class="card-body" style="padding: 0;">
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Domain</th>
+                      <th>Network Function</th>
+                      <th>Interface / Port</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="overview-nfs-tbody">
+                    <!-- Dynamic NF rows -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>Recent IMS Calls &amp; Billed Events</h3>
+              <button class="btn btn-sm btn-secondary" onclick="app.switchTab('calls')">View All Calls</button>
+            </div>
+            <div class="card-body">
+              <div class="recent-calls-list" id="overview-recent-calls">
+                <!-- Dynamic recent calls -->
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="kpi-card">
-          <span class="kpi-title">Total Consumed Revenue</span>
-          <div class="kpi-value text-green" id="kpi-revenue-consumed">0.00 LAB</div>
-          <div class="kpi-subtext" id="kpi-revenue-avail">Avail: 0.00 LAB • 4 Accounts</div>
+      </section>
+
+      <!-- ============================================================= -->
+      <!-- VIEW 2: SUBSCRIBERS & SLICES                                  -->
+      <!-- ============================================================= -->
+      <section id="view-subscribers" class="view-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Subscriber &amp; Dual-Slice Management</h2>
+            <p class="subtitle">Multi-PLMN SIM identities, allocated IP pools, PDU slice tunnels, and live balance accounts</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" id="btn-open-topup">Account Top-Up</button>
+          </div>
         </div>
 
-        <div class="kpi-card">
-          <span class="kpi-title">Service Assurance (QoE)</span>
-          <div class="kpi-value" id="kpi-qoe-mos">4.41 MOS</div>
-          <div class="kpi-subtext" id="kpi-qoe-stats">CSSR: 100% • Jitter: &lt; 0.5ms</div>
+        <div class="subscribers-grid" id="subscribers-cards-container">
+          <!-- Rendered by app.js -->
         </div>
-      </div>
+      </section>
 
-      <!-- Split Layout: Network Health & Recent Transactions -->
-      <div class="two-col-grid">
-        
-        <!-- Left: 5GC & IMS Network Status -->
+      <!-- ============================================================= -->
+      <!-- VIEW 3: IMS CALLS & MEDIA                                     -->
+      <!-- ============================================================= -->
+      <section id="view-calls" class="view-panel">
+        <div class="panel-header">
+          <div>
+            <h2>IMS Signaling, RTP Media &amp; Call Records</h2>
+            <p class="subtitle">SIP Digest MD5 sessions, RTPEngine SDP proxying, G.711 voice media, and rated billing events</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" id="btn-trigger-domestic">Domestic Call (UE1 → UE2)</button>
+            <button class="btn btn-outline-green" id="btn-trigger-roaming">Roaming Call (UE1 → UE3)</button>
+          </div>
+        </div>
+
+        <!-- Live Call Execution Console -->
+        <div class="card call-runner-card" id="call-runner-card" style="display: none;">
+          <div class="card-header">
+            <div class="header-left">
+              <h3 id="runner-title">Live IMS Voice Call Execution</h3>
+              <span id="runner-status-badge" class="badge badge-warning">Signaling in progress...</span>
+            </div>
+            <button class="btn btn-sm btn-secondary" onclick="app.closeRunner()">Close Console</button>
+          </div>
+          <div class="card-body">
+            <div class="runner-stats-row" id="runner-stats-row">
+              <!-- Dynamic stats on call finish -->
+            </div>
+            <pre class="terminal-log" id="runner-terminal-log">Starting SIP INVITE...</pre>
+          </div>
+        </div>
+
+        <!-- CDR Table -->
         <div class="card">
           <div class="card-header">
-            <h3>Network Functions & Service Gateways</h3>
-            <span class="badge badge-success" id="nf-badge">All Healthy</span>
+            <h3>Kamailio Call Detail Records (CDRs) &amp; Rated Transactions</h3>
+            <span class="badge badge-neutral" id="cdr-count-badge">0 Records</span>
           </div>
           <div class="card-body" style="padding: 0;">
             <div class="table-responsive">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Domain</th>
-                    <th>Network Function / Component</th>
-                    <th>Interface / Port</th>
+                    <th>CDR ID</th>
+                    <th>Scenario</th>
+                    <th>Caller</th>
+                    <th>Callee</th>
+                    <th>Duration</th>
+                    <th>SIP Status</th>
+                    <th>RTP Media</th>
+                    <th>Rated Charge</th>
+                    <th>Transaction ID</th>
+                    <th>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody id="calls-table-tbody">
+                  <!-- Dynamic CDR Rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================= -->
+      <!-- VIEW 4: REVENUE & CHARGING                                    -->
+      <!-- ============================================================= -->
+      <section id="view-charging" class="view-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Erlang/OTP Telecom Revenue &amp; Rating Engine</h2>
+            <p class="subtitle">Double-entry prepaid balance ledger, real-time tariffs, idempotency, and automated financial audits</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-secondary" id="btn-open-quote-modal">Rate Quote Calculator</button>
+            <button class="btn btn-primary" id="btn-run-reconciliation">Run Reconciliation Audit</button>
+          </div>
+        </div>
+
+        <!-- Reconciliation Banner -->
+        <div class="card reconcile-card" id="reconcile-card">
+          <div class="reconcile-inner">
+            <div class="reconcile-status-box">
+              <div>
+                <h3 id="audit-headline" style="color: var(--accent-green-text);">Financial Reconciliation: PASS</h3>
+                <p id="audit-subtext" style="font-size: 0.78rem; color: var(--text-secondary);">Double-entry balance invariants validated across all subscriber ledger accounts.</p>
+              </div>
+            </div>
+            <div class="reconcile-stats">
+              <div class="rec-stat">
+                <span class="stat-label">Audited Accounts</span>
+                <span class="stat-val" id="rec-accounts">4</span>
+              </div>
+              <div class="rec-stat">
+                <span class="stat-label">Detected Anomalies</span>
+                <span class="stat-val text-green" id="rec-anomalies">0</span>
+              </div>
+              <div class="rec-stat">
+                <span class="stat-label">Total Topups</span>
+                <span class="stat-val" id="rec-topups">105.02 LAB</span>
+              </div>
+              <div class="rec-stat">
+                <span class="stat-label">Avail + Consumed</span>
+                <span class="stat-val" id="rec-equation">105.02 LAB</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tariffs & Accounts -->
+        <div class="two-col-grid">
+          <div class="card">
+            <div class="card-header">
+              <h3>Configured Rating Tariffs</h3>
+              <span class="badge badge-neutral" id="tariffs-count-badge">8 Tariffs</span>
+            </div>
+            <div class="card-body" style="padding: 0;">
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Tariff ID</th>
+                      <th>Plan</th>
+                      <th>Service</th>
+                      <th>Dest</th>
+                      <th>Setup Fee</th>
+                      <th>Unit Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tariffs-table-tbody">
+                    <!-- Dynamic tariffs -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>Prepaid Subscriber Balances</h3>
+              <span class="badge badge-success">ACID Store</span>
+            </div>
+            <div class="card-body">
+              <div class="accounts-list" id="charging-accounts-list">
+                <!-- Dynamic accounts balances -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transaction Ledger -->
+        <div class="card" style="margin-top: 0.25rem;">
+          <div class="card-header">
+            <h3>Double-Entry Transaction Ledger Audit Trail</h3>
+            <span class="badge badge-neutral" id="tx-count-badge">0 Transactions</span>
+          </div>
+          <div class="card-body" style="padding: 0;">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Tx ID</th>
+                    <th>Account</th>
+                    <th>Type</th>
+                    <th>Amount (LAB)</th>
+                    <th>Balance Before</th>
+                    <th>Balance After</th>
+                    <th>Reference / Call-ID</th>
+                    <th>Rating Description</th>
+                    <th>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody id="transactions-table-tbody">
+                  <!-- Dynamic Transactions -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================= -->
+      <!-- VIEW 5: NETWORK TOPOLOGY                                      -->
+      <!-- ============================================================= -->
+      <section id="view-topology" class="view-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Multi-PLMN Network Topology &amp; Service Map</h2>
+            <p class="subtitle">Architecture map of Home PLMN (Egypt 602/03, 602/04), Visited PLMN (Bosnia 218/90), and Observability Stack</p>
+          </div>
+          <div class="header-actions">
+            <a href="http://172.19.0.2:30300" target="_blank" class="btn btn-secondary">Open Grafana (:30300)</a>
+            <a href="http://172.19.0.2:30090/targets" target="_blank" class="btn btn-secondary">Prometheus Targets (:30090)</a>
+          </div>
+        </div>
+
+        <!-- Topology Diagram -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Infrastructure &amp; Protocol Links</h3>
+            <span class="badge badge-success">3GPP Rel-16 Compliant</span>
+          </div>
+          <div class="card-body">
+            <div class="topology-map" id="topology-map-container">
+              <!-- Dynamic Topology rendered by visualizer.js -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Endpoints Table -->
+        <div class="card" style="margin-top: 0.25rem;">
+          <div class="card-header">
+            <h3>Service Endpoints &amp; Protocol Ports Reference</h3>
+          </div>
+          <div class="card-body" style="padding: 0;">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Component</th>
+                    <th>Protocol / Role</th>
+                    <th>Endpoint Address</th>
+                    <th>Underlying Network</th>
                     <th>Status</th>
                   </tr>
                 </thead>
-                <tbody id="overview-nfs-tbody">
-                  <!-- Dynamic NF rows -->
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: Recent IMS Calls & Rated Charges -->
-        <div class="card">
-          <div class="card-header">
-            <h3>Recent IMS Calls & Billed Events</h3>
-            <button class="btn btn-sm btn-secondary" onclick="app.switchTab('calls')">View All Calls</button>
-          </div>
-          <div class="card-body">
-            <div class="recent-calls-list" id="overview-recent-calls">
-              <!-- Dynamic recent calls -->
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- VIEW 2: SUBSCRIBERS & SLICES -->
-    <!-- ================================================================= -->
-    <section id="view-subscribers" class="view-panel">
-      <div class="panel-header">
-        <div>
-          <h2>Subscriber & Dual-Slice Management</h2>
-          <p class="subtitle">Multi-PLMN SIM identities, allocated IP pools, PDU slice tunnels, and live balance accounts</p>
-        </div>
-        <div class="header-actions">
-          <button class="btn btn-primary" id="btn-open-topup">Account Top-Up</button>
-        </div>
-      </div>
-
-      <div class="subscribers-grid" id="subscribers-cards-container">
-        <!-- Rendered by app.js -->
-      </div>
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- VIEW 3: IMS CALLS & MEDIA -->
-    <!-- ================================================================= -->
-    <section id="view-calls" class="view-panel">
-      <div class="panel-header">
-        <div>
-          <h2>IMS Signaling, RTP Media & Call Records</h2>
-          <p class="subtitle">SIP Digest MD5 sessions, RTPEngine SDP proxying, G.711 voice media, and rated billing events</p>
-        </div>
-        <div class="header-actions">
-          <button class="btn btn-primary" id="btn-trigger-domestic">Domestic Call (UE1 ➔ UE2)</button>
-          <button class="btn btn-outline-green" id="btn-trigger-roaming">Roaming Call (UE1 ➔ UE3)</button>
-        </div>
-      </div>
-
-      <!-- Live Interactive Call Execution Console -->
-      <div class="card call-runner-card" id="call-runner-card" style="display: none;">
-        <div class="card-header">
-          <div class="header-left">
-            <h3 id="runner-title">Live IMS Voice Call Execution</h3>
-            <span id="runner-status-badge" class="badge badge-warning">Signaling in progress...</span>
-          </div>
-          <button class="btn btn-sm btn-secondary" onclick="app.closeRunner()">Close Console</button>
-        </div>
-        <div class="card-body">
-          <div class="runner-stats-row" id="runner-stats-row">
-            <!-- Dynamic stats on call finish -->
-          </div>
-          <pre class="terminal-log" id="runner-terminal-log">Starting SIP INVITE...</pre>
-        </div>
-      </div>
-
-      <!-- CDR Table Card -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Kamailio Call Detail Records (CDRs) & Rated Transactions</h3>
-          <span class="badge badge-neutral" id="cdr-count-badge">0 Records</span>
-        </div>
-        <div class="card-body" style="padding: 0;">
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>CDR ID</th>
-                  <th>Scenario</th>
-                  <th>Caller</th>
-                  <th>Callee</th>
-                  <th>Duration</th>
-                  <th>SIP Status</th>
-                  <th>RTP Media</th>
-                  <th>Rated Charge</th>
-                  <th>Transaction ID</th>
-                  <th>Timestamp</th>
-                </tr>
-              </thead>
-              <tbody id="calls-table-tbody">
-                <!-- Dynamic CDR Rows -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- VIEW 4: REVENUE & CHARGING -->
-    <!-- ================================================================= -->
-    <section id="view-charging" class="view-panel">
-      <div class="panel-header">
-        <div>
-          <h2>Erlang/OTP Telecom Revenue & Rating Engine</h2>
-          <p class="subtitle">Double-entry prepaid balance ledger, real-time tariffs, idempotency, and automated financial audits</p>
-        </div>
-        <div class="header-actions">
-          <button class="btn btn-secondary" id="btn-open-quote-modal">Rate Quote Calculator</button>
-          <button class="btn btn-primary" id="btn-run-reconciliation">Run Reconciliation Audit</button>
-        </div>
-      </div>
-
-      <!-- Financial Reconciliation Banner -->
-      <div class="card reconcile-card" id="reconcile-card">
-        <div class="reconcile-inner">
-          <div class="reconcile-status-box">
-            <div>
-              <h3 id="audit-headline" style="color: var(--accent-green-text);">Financial Reconciliation: PASS</h3>
-              <p id="audit-subtext" style="font-size: 0.82rem; color: var(--text-secondary);">Double-entry balance invariants validated across all subscriber ledger accounts.</p>
-            </div>
-          </div>
-          <div class="reconcile-stats">
-            <div class="rec-stat">
-              <span class="stat-label">Audited Accounts</span>
-              <span class="stat-val" id="rec-accounts">4</span>
-            </div>
-            <div class="rec-stat">
-              <span class="stat-label">Detected Anomalies</span>
-              <span class="stat-val text-green" id="rec-anomalies">0</span>
-            </div>
-            <div class="rec-stat">
-              <span class="stat-label">Total Topups</span>
-              <span class="stat-val" id="rec-topups">105.02 LAB</span>
-            </div>
-            <div class="rec-stat">
-              <span class="stat-label">Avail + Consumed</span>
-              <span class="stat-val" id="rec-equation">105.02 LAB</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tariffs & Ledger Split -->
-      <div class="two-col-grid">
-        
-        <!-- Tariffs Matrix Table -->
-        <div class="card">
-          <div class="card-header">
-            <h3>Configured Rating Tariffs</h3>
-            <span class="badge badge-neutral" id="tariffs-count-badge">8 Tariffs</span>
-          </div>
-          <div class="card-body" style="padding: 0;">
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
+                <tbody>
                   <tr>
-                    <th>Tariff ID</th>
-                    <th>Plan</th>
-                    <th>Service</th>
-                    <th>Dest</th>
-                    <th>Setup Fee</th>
-                    <th>Unit Rate</th>
+                    <td><strong>Home AMF</strong></td>
+                    <td>N2 NGAP (SCTP)</td>
+                    <td><code>172.19.0.2:38412</code></td>
+                    <td>Home PLMN 602/03 &amp; 602/04</td>
+                    <td><span class="badge badge-success">LISTENING</span></td>
                   </tr>
-                </thead>
-                <tbody id="tariffs-table-tbody">
-                  <!-- Dynamic tariffs -->
+                  <tr>
+                    <td><strong>Visited AMF (V-AMF)</strong></td>
+                    <td>N2 NGAP (SCTP)</td>
+                    <td><code>172.19.0.2:38413</code></td>
+                    <td>Visited PLMN 218/90 (BH Telecom)</td>
+                    <td><span class="badge badge-success">LISTENING</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>User Plane Function (UPF)</strong></td>
+                    <td>N3 GTP-U (UDP 2152) / N4 PFCP (UDP 8805)</td>
+                    <td><code>172.19.0.2:2152 / 8805</code></td>
+                    <td>GTP Tunnel Endpoints</td>
+                    <td><span class="badge badge-success">ACTIVE</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Kamailio P-CSCF</strong></td>
+                    <td>SIP Proxy (UDP/TCP)</td>
+                    <td><code>10.46.0.1:5060</code></td>
+                    <td>IMS Bearer (DNN: ims)</td>
+                    <td><span class="badge badge-success">LISTENING</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>RTPEngine Media Proxy</strong></td>
+                    <td>NG Control / RTP Relay</td>
+                    <td><code>10.46.0.1:22222 / 20000-20100</code></td>
+                    <td>User Plane Voice Media</td>
+                    <td><span class="badge badge-success">ACTIVE</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Erlang/OTP Charging Service</strong></td>
+                    <td>Cowboy REST API (HTTP)</td>
+                    <td><code>http://127.0.0.1:8085</code></td>
+                    <td>Revenue Management</td>
+                    <td><span class="badge badge-success">UP (OTP 25)</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Prometheus Telemetry</strong></td>
+                    <td>Metrics Engine (HTTP)</td>
+                    <td><code>http://172.19.0.2:30090</code></td>
+                    <td>Observability Stack</td>
+                    <td><span class="badge badge-success">SCRAPING (5s)</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Alertmanager</strong></td>
+                    <td>Incident Detection (HTTP)</td>
+                    <td><code>http://172.19.0.2:30093</code></td>
+                    <td>26 Alert Rules Active</td>
+                    <td><span class="badge badge-success">HEALTHY</span></td>
+                  </tr>
                 </tbody>
               </table>
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- Accounts Balance Summary -->
-        <div class="card">
-          <div class="card-header">
-            <h3>Prepaid Subscriber Balances</h3>
-            <span class="badge badge-success">ACID Store</span>
-          </div>
-          <div class="card-body">
-            <div class="accounts-list" id="charging-accounts-list">
-              <!-- Dynamic accounts balances -->
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Transaction Ledger Table -->
-      <div class="card" style="margin-top: 1.5rem;">
-        <div class="card-header">
-          <h3>Double-Entry Transaction Ledger Audit Trail</h3>
-          <span class="badge badge-neutral" id="tx-count-badge">0 Transactions</span>
-        </div>
-        <div class="card-body" style="padding: 0;">
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Tx ID</th>
-                  <th>Account</th>
-                  <th>Type</th>
-                  <th>Amount (LAB)</th>
-                  <th>Balance Before</th>
-                  <th>Balance After</th>
-                  <th>Reference / Call-ID</th>
-                  <th>Rating Description</th>
-                  <th>Timestamp</th>
-                </tr>
-              </thead>
-              <tbody id="transactions-table-tbody">
-                <!-- Dynamic Transactions -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- VIEW 5: NETWORK TOPOLOGY -->
-    <!-- ================================================================= -->
-    <section id="view-topology" class="view-panel">
-      <div class="panel-header">
-        <div>
-          <h2>Multi-PLMN Network Topology & Service Map</h2>
-          <p class="subtitle">Architecture map of Home PLMN (Egypt 602/03, 602/04), Visited PLMN (Bosnia 218/90), and Observability Stack</p>
-        </div>
-        <div class="header-actions">
-          <a href="http://172.19.0.2:30300" target="_blank" class="btn btn-secondary">Open Grafana (:30300)</a>
-          <a href="http://172.19.0.2:30090/targets" target="_blank" class="btn btn-secondary">Prometheus Targets (:30090)</a>
-        </div>
-      </div>
-
-      <!-- Topology Diagram View -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Infrastructure & Protocol Links</h3>
-          <span class="badge badge-success">3GPP Rel-16 Compliant</span>
-        </div>
-        <div class="card-body">
-          <div class="topology-map" id="topology-map-container">
-            <!-- Dynamic Topology Nodes rendered by visualizer.js -->
-          </div>
-        </div>
-      </div>
-
-      <!-- Service Endpoints & Health Table -->
-      <div class="card" style="margin-top: 1.5rem;">
-        <div class="card-header">
-          <h3>Service Endpoints & Protocol Ports Reference</h3>
-        </div>
-        <div class="card-body" style="padding: 0;">
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Component</th>
-                  <th>Protocol / Role</th>
-                  <th>Endpoint Address</th>
-                  <th>Underlying Network</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>Home AMF</strong></td>
-                  <td>N2 NGAP (SCTP)</td>
-                  <td><code>172.19.0.2:38412</code></td>
-                  <td>Home PLMN 602/03 & 602/04</td>
-                  <td><span class="badge badge-success">LISTENING</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Visited AMF (V-AMF)</strong></td>
-                  <td>N2 NGAP (SCTP)</td>
-                  <td><code>172.19.0.2:38413</code></td>
-                  <td>Visited PLMN 218/90 (BH Telecom)</td>
-                  <td><span class="badge badge-success">LISTENING</span></td>
-                </tr>
-                <tr>
-                  <td><strong>User Plane Function (UPF)</strong></td>
-                  <td>N3 GTP-U (UDP 2152) / N4 PFCP (UDP 8805)</td>
-                  <td><code>172.19.0.2:2152 / 8805</code></td>
-                  <td>GTP Tunnel Endpoints</td>
-                  <td><span class="badge badge-success">ACTIVE</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Kamailio P-CSCF</strong></td>
-                  <td>SIP Proxy (UDP/TCP)</td>
-                  <td><code>10.46.0.1:5060</code></td>
-                  <td>IMS Bearer (DNN: ims)</td>
-                  <td><span class="badge badge-success">LISTENING</span></td>
-                </tr>
-                <tr>
-                  <td><strong>RTPEngine Media Proxy</strong></td>
-                  <td>NG Control / RTP Relay</td>
-                  <td><code>10.46.0.1:22222 / 20000-20100</code></td>
-                  <td>User Plane Voice Media</td>
-                  <td><span class="badge badge-success">ACTIVE</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Erlang/OTP Charging Service</strong></td>
-                  <td>Cowboy REST API (HTTP)</td>
-                  <td><code>http://127.0.0.1:8085</code></td>
-                  <td>Revenue Management</td>
-                  <td><span class="badge badge-success">UP (OTP 25)</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Prometheus Telemetry</strong></td>
-                  <td>Metrics Engine (HTTP)</td>
-                  <td><code>http://172.19.0.2:30090</code></td>
-                  <td>Observability Stack</td>
-                  <td><span class="badge badge-success">SCRAPING (5s)</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Alertmanager</strong></td>
-                  <td>Incident Detection (HTTP)</td>
-                  <td><code>http://172.19.0.2:30093</code></td>
-                  <td>26 Alert Rules Active</td>
-                  <td><span class="badge badge-success">HEALTHY</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-    </section>
-
-  </main>
+    </main>
+  </div>
 
   <!-- ================================================================= -->
-  <!-- MODALS -->
+  <!-- MODALS                                                            -->
   <!-- ================================================================= -->
 
   <!-- Top-Up Modal -->
@@ -528,7 +550,7 @@
   <div class="modal-overlay" id="modal-quote" style="display: none;">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Tariff & Rating Quote Simulator</h3>
+        <h3>Tariff &amp; Rating Quote Simulator</h3>
         <button class="modal-close" onclick="app.closeModal('modal-quote')">✕</button>
       </div>
       <div class="modal-body">
@@ -558,9 +580,9 @@
           <label>Units / Duration (seconds or MB):</label>
           <input type="number" id="quote-units" class="text-input" value="60" min="1">
         </div>
-        
+
         <div class="quote-result-box" id="quote-result-box" style="display: none;">
-          <h4 style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">Rated Quote Breakdown</h4>
+          <h4 style="font-size: 0.82rem; font-weight: 600; margin-bottom: 0.4rem;">Rated Quote Breakdown</h4>
           <div class="quote-stat-row">
             <span class="text-secondary">Tariff Applied:</span>
             <strong id="qr-tariff">tariff-domestic-voice</strong>
