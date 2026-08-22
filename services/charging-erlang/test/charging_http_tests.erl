@@ -172,6 +172,46 @@ http_test_() ->
                   Json = jsx:decode(list_to_binary(RespBody), [return_maps]),
                   ?assertEqual(<<"EXISTING">>, maps:get(<<"status">>, Json)),
                   ?assertEqual(29.0000, maps:get(<<"available_balance">>, Json))
+              end},
+
+             {"[HTTP-TEST-14] POST /v1/accounts/acc-ue1/topup with idempotency key",
+              fun() ->
+                  ReqBody = jsx:encode(#{
+                      <<"amount">> => 15.0,
+                      <<"description">> => <<"Test HTTP Topup">>,
+                      <<"reference_id">> => <<"HTTP-TOPUP-REF-001">>
+                  }),
+                  {ok, {{_, 200, _}, _, RespBody1}} = httpc:request(post, 
+                      {BaseUrl ++ "/v1/accounts/acc-ue1/topup", [{"content-type", "application/json"}], "application/json", binary_to_list(ReqBody)}, [], []),
+                  Json1 = jsx:decode(list_to_binary(RespBody1), [return_maps]),
+                  ?assertEqual(65.0000, maps:get(<<"balance_available">>, Json1)),
+
+                  %% Repeat duplicate request
+                  {ok, {{_, 200, _}, _, RespBody2}} = httpc:request(post, 
+                      {BaseUrl ++ "/v1/accounts/acc-ue1/topup", [{"content-type", "application/json"}], "application/json", binary_to_list(ReqBody)}, [], []),
+                  Json2 = jsx:decode(list_to_binary(RespBody2), [return_maps]),
+                  ?assertEqual(65.0000, maps:get(<<"balance_available">>, Json2))
+              end},
+
+             {"[HTTP-TEST-15] POST /v1/accounts/acc-ue1/recharge alias route",
+              fun() ->
+                  ReqBody = jsx:encode(#{
+                      <<"amount">> => 5.0,
+                      <<"description">> => <<"Test HTTP Recharge Alias">>
+                  }),
+                  {ok, {{_, 200, _}, _, RespBody}} = httpc:request(post, 
+                      {BaseUrl ++ "/v1/accounts/acc-ue1/recharge", [{"content-type", "application/json"}], "application/json", binary_to_list(ReqBody)}, [], []),
+                  Json = jsx:decode(list_to_binary(RespBody), [return_maps]),
+                  ?assertEqual(70.0000, maps:get(<<"balance_available">>, Json))
+              end},
+
+             {"[HTTP-TEST-16] Invalid topup amount rejected with HTTP 400",
+              fun() ->
+                  ReqBody = jsx:encode(#{<<"amount">> => -10.0}),
+                  {ok, {{_, 400, _}, _, RespBody}} = httpc:request(post, 
+                      {BaseUrl ++ "/v1/accounts/acc-ue1/topup", [{"content-type", "application/json"}], "application/json", binary_to_list(ReqBody)}, [], []),
+                  Json = jsx:decode(list_to_binary(RespBody), [return_maps]),
+                  ?assertEqual(true, maps:get(<<"error">>, Json))
               end}
          ]
      end}.

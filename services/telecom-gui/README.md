@@ -8,9 +8,11 @@
 
 A professional, engineering-grade web management console providing real-time visibility and interactive control over the entire 5G Standalone Core, Kamailio IMS service layer, UERANSIM radio emulation, and Erlang/OTP revenue engine.
 
+![Telecom Operations & Revenue Control Center GUI](../../docs/images/telecom-control-center-gui.png)
+
 ---
 
-## 🌟 Key Features
+## Key Features
 
 1. **End-to-End Service Chain Visualizer**:
    * Interactive animated pipeline illustrating:
@@ -24,9 +26,9 @@ A professional, engineering-grade web management console providing real-time vis
 
 3. **Interactive IMS Call Trigger & Media Verification**:
    * Trigger real voice calls directly from the GUI:
-     * 🔵 **Domestic Call**: $\text{UE1 } (602/03) \longleftrightarrow \text{UE2 } (602/04)$
-     * 🟠 **Inter-PLMN Roaming Call**: $\text{UE1 } (602/03) \longleftrightarrow \text{UE3 } (218/90)$
-     * 🟣 **Reverse Roaming Call**: $\text{UE3 } (218/90) \longleftrightarrow \text{UE1 } (602/03)$
+     * **Domestic Call**: $\text{UE1 } (602/03) \longleftrightarrow \text{UE2 } (602/04)$
+     * **Inter-PLMN Roaming Call**: $\text{UE1 } (602/03) \longleftrightarrow \text{UE3 } (218/90)$
+     * **Reverse Roaming Call**: $\text{UE3 } (218/90) \longleftrightarrow \text{UE1 } (602/03)$
    * Real-time terminal log stream showing SIP Digest MD5 challenge/response, $25/25$ G.711 PCMU RTP packet counters ($0\%$ loss), and immediate rated balance deductions.
 
 4. **Revenue & Rating Control Center**:
@@ -96,7 +98,20 @@ The GUI server (`server.py`) exposes the following endpoints:
 | `GET` | `/api/network/topology` | Multi-PLMN node, interface, and port mapping |
 | `GET` | `/api/system/health` | Subsystem connectivity check (Erlang, Prometheus, Alertmanager) |
 | `POST` | `/api/actions/trigger-call` | Execute real IMS call and Erlang rating event |
-| `POST` | `/api/actions/topup` | Top up subscriber balance on Erlang server |
+| `POST` | `/api/actions/recharge` | Account balance recharge / top-up with idempotency support |
+| `POST` | `/api/actions/topup` | Alias for account top-up |
 | `POST` | `/api/actions/quote` | Simulate rating quote calculation |
 | `POST` | `/api/actions/reconcile` | Trigger instant financial ledger audit |
 | `POST` | `/api/actions/measure-kpis` | Measure real RFC 3550 jitter, MOS score, and PDD |
+
+---
+
+## 💳 Account Recharge & Balance Management
+
+The platform includes carrier-grade prepaid balance recharge:
+- **Interactive Recharge Modal:** Live dynamic preview of new balance before confirmation (`Current + Amount = New`).
+- **Strict Financial Validation:** Rejects negative, zero, non-numeric, and non-finite amounts on backend with HTTP 400.
+- **Idempotency Guarantees:** Supports client-provided `reference_id` / `idempotency_key` preventing duplicate debits/credits.
+- **Low-Balance Alerts:** Displays clear visual warnings when subscriber liquid funds fall below operational thresholds.
+- **Double-Entry Journal:** Every top-up records an immutable `TOPUP` ledger entry with pre/post balance tracking.
+

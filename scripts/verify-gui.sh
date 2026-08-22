@@ -89,21 +89,21 @@ else
 fi
 
 # [GUI-03] CSS
-if curl -s "${GUI_URL}/css/style.css" | grep -q "Dark Cyber-Telecom Glassmorphism"; then
+if curl -s "${GUI_URL}/css/style.css" | grep -q -i "Stylesheet"; then
     check_pass "[GUI-03] CSS Stylesheet" "Static asset /css/style.css delivered (200 OK)"
 else
     check_fail "[GUI-03] CSS Stylesheet" "Failed to load /css/style.css"
 fi
 
 # [GUI-04] App JS
-if curl -s "${GUI_URL}/js/app.js" | grep -q "Telecom Operations & Revenue Control Center"; then
+if curl -s "${GUI_URL}/js/app.js" | grep -q -i "Telecom Operations"; then
     check_pass "[GUI-04] Core App JS" "Static asset /js/app.js delivered (200 OK)"
 else
     check_fail "[GUI-04] Core App JS" "Failed to load /js/app.js"
 fi
 
 # [GUI-05] Visualizer JS
-if curl -s "${GUI_URL}/js/visualizer.js" | grep -q "visualizer"; then
+if curl -s "${GUI_URL}/js/visualizer.js" | grep -q -i "visualizer"; then
     check_pass "[GUI-05] Visualizer JS" "Static asset /js/visualizer.js delivered (200 OK)"
 else
     check_fail "[GUI-05] Visualizer JS" "Failed to load /js/visualizer.js"

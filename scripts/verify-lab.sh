@@ -65,6 +65,17 @@ echo -e "${BOLD}    5G-IMS-Lab Comprehensive End-to-End Verification Suite      
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
+ensure_bridge_ips() {
+    local bridge_dev
+    bridge_dev=$(ip -4 addr show 2>/dev/null | grep -B 2 "172.19.0.1" | awk '/^[0-9]+:/ {print $2}' | tr -d ':' | head -n 1 || echo "")
+    if [ -n "${bridge_dev}" ]; then
+        if ! ip -4 addr show dev "${bridge_dev}" | grep -q "172.19.0.3"; then
+            ip addr add 172.19.0.3/16 dev "${bridge_dev}" 2>/dev/null || true
+        fi
+    fi
+}
+ensure_bridge_ips
+
 # ─────────────────────────────────────────────────────────────────
 # 1. Deployment Environment
 # ─────────────────────────────────────────────────────────────────

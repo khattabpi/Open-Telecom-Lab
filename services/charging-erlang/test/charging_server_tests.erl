@@ -143,5 +143,28 @@ server_test_() ->
               {ok, Report} = charging_server:reconcile(),
               ?assertEqual(<<"PASS">>, maps:get(<<"status">>, Report)),
               ?assertEqual(0, maps:get(<<"anomalies_count">>, Report))
+          end},
+
+         {"[SERVER-TEST-12] Topup idempotency with identical ReferenceId",
+          fun() ->
+              {ok, Acc1} = charging_server:topup(<<"acc-ue2">>, 10.0000, <<"Recharge Test">>, <<"REF-EUNIT-123">>),
+              ?assertEqual(33.5000, maps:get(<<"balance_available">>, Acc1)),
+              
+              %% Second attempt with same ReferenceId must NOT double-credit
+              {ok, Acc2} = charging_server:topup(<<"acc-ue2">>, 10.0000, <<"Recharge Test">>, <<"REF-EUNIT-123">>),
+              ?assertEqual(33.5000, maps:get(<<"balance_available">>, Acc2)),
+
+              %% Confirm reconciliation still passes
+              {ok, Report} = charging_server:reconcile(),
+              ?assertEqual(<<"PASS">>, maps:get(<<"status">>, Report)),
+              ?assertEqual(0, maps:get(<<"anomalies_count">>, Report))
+          end},
+
+         {"[SERVER-TEST-13] Invalid topup amount rejection (0, negative, NaN)",
+          fun() ->
+              ?assertEqual({error, invalid_topup_amount}, charging_server:topup(<<"acc-ue2">>, 0.0, <<"Zero">>)),
+              ?assertEqual({error, invalid_topup_amount}, charging_server:topup(<<"acc-ue2">>, -5.0, <<"Negative">>)),
+              ?assertEqual({error, invalid_topup_amount}, charging_server:topup(<<"acc-ue2">>, <<"invalid">>, <<"Bad string">>)),
+              ?assertEqual({error, account_not_found}, charging_server:topup(<<"acc-nonexistent">>, 10.0, <<"Not found">>))
           end}
      ]}.

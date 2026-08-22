@@ -32,6 +32,17 @@ fi
 export FORMAT
 export TARGET
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Ensure UERANSIM gNodeBs & UEs are running before measuring KPIs
+if ! ip netns list 2>/dev/null | grep -q "ueransim-602030000000001-ims-psi2" || \
+   ! ip netns list 2>/dev/null | grep -q "ueransim-602040000000002-ims-psi2" || \
+   ! ip netns list 2>/dev/null | grep -q "ueransim-602030000000003-ims-psi2"; then
+    echo "[!] UERANSIM UE network namespaces not found. Starting gNodeBs and UEs..."
+    bash "${SCRIPT_DIR}/run-gnb.sh" all >/dev/null 2>&1 || true
+    bash "${SCRIPT_DIR}/run-ue.sh" all
+fi
+
 python3 - <<'EOF'
 import sys, os, socket, re, time, threading, json, subprocess
 

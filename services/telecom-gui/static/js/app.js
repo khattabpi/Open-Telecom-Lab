@@ -33,6 +33,19 @@ const app = {
       });
     });
 
+    // Sidebar Collapse / Expand Toggle
+    const btnToggleSidebar = document.getElementById("sidebar-toggle-btn");
+    if (btnToggleSidebar) {
+      btnToggleSidebar.addEventListener("click", () => {
+        if (window.innerWidth <= 768) {
+          const sidebar = document.getElementById("app-sidebar");
+          if (sidebar) sidebar.classList.toggle("open");
+        } else {
+          document.body.classList.toggle("sidebar-collapsed");
+        }
+      });
+    }
+
     // Auto-refresh select
     const refreshSelect = document.getElementById("refresh-select");
     if (refreshSelect) {
@@ -73,13 +86,18 @@ const app = {
     // Top-up Modal actions
     const btnOpenTopup = document.getElementById("btn-open-topup");
     if (btnOpenTopup) {
-      btnOpenTopup.addEventListener("click", () => this.openModal("modal-topup"));
+      btnOpenTopup.addEventListener("click", () => this.openRechargeModal());
     }
 
     const btnSubmitTopup = document.getElementById("btn-submit-topup");
     if (btnSubmitTopup) {
       btnSubmitTopup.addEventListener("click", () => this.submitTopup());
     }
+
+    const topupAcc = document.getElementById("topup-account-select");
+    const topupAmt = document.getElementById("topup-amount");
+    if (topupAcc) topupAcc.addEventListener("change", () => this.updateRechargePreview());
+    if (topupAmt) topupAmt.addEventListener("input", () => this.updateRechargePreview());
 
     // Quote Modal actions
     const btnOpenQuote = document.getElementById("btn-open-quote-modal");
@@ -96,6 +114,33 @@ const app = {
     const btnReconcile = document.getElementById("btn-run-reconciliation");
     if (btnReconcile) {
       btnReconcile.addEventListener("click", () => this.runReconciliation());
+    }
+
+    // Global Search Input
+    const searchInput = document.getElementById("global-search-input");
+    if (searchInput) {
+      searchInput.addEventListener("input", (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        if (!query) {
+          this.renderSubscribers(this.data.subscribers || []);
+          this.renderCalls(this.data.calls || []);
+          return;
+        }
+        const filteredSubs = (this.data.subscribers || []).filter(s => 
+          s.name.toLowerCase().includes(query) ||
+          s.imsi.includes(query) ||
+          s.msisdn.includes(query) ||
+          s.account_id.toLowerCase().includes(query)
+        );
+        this.renderSubscribers(filteredSubs);
+        
+        const filteredCalls = (this.data.calls || []).filter(c =>
+          c.caller.toLowerCase().includes(query) ||
+          c.callee.toLowerCase().includes(query) ||
+          String(c.id).includes(query)
+        );
+        this.renderCalls(filteredCalls);
+      });
     }
   },
 
@@ -252,7 +297,7 @@ const app = {
     if (nfsTbody) {
       nfsTbody.innerHTML = `
         <tr>
-          <td><span class="badge badge-neutral">5GC Home</span></td>
+          <td><span class="badge badge-network">5GC Home</span></td>
           <td><strong>Home AMF + SMF</strong></td>
           <td><code>SCTP :38412 / HTTP</code></td>
           <td><span class="badge badge-success">ACTIVE</span></td>
@@ -264,25 +309,25 @@ const app = {
           <td><span class="badge badge-success">ACTIVE (BH Telecom)</span></td>
         </tr>
         <tr>
-          <td><span class="badge badge-neutral">User Plane</span></td>
+          <td><span class="badge badge-network">User Plane</span></td>
           <td><strong>UPF (PFCP & GTP-U)</strong></td>
           <td><code>N4 :8805 / N3 :2152</code></td>
           <td><span class="badge badge-success">ACTIVE (10.45.0.1)</span></td>
         </tr>
         <tr>
-          <td><span class="badge badge-neutral">IMS Signalling</span></td>
+          <td><span class="badge badge-voice">IMS Voice</span></td>
           <td><strong>Kamailio P-CSCF / S-CSCF</strong></td>
           <td><code>SIP :5060 (UDP/TCP)</code></td>
           <td><span class="badge badge-success">LISTENING (10.46.0.1)</span></td>
         </tr>
         <tr>
-          <td><span class="badge badge-neutral">Media Proxy</span></td>
+          <td><span class="badge badge-voice">Media Proxy</span></td>
           <td><strong>RTPEngine</strong></td>
           <td><code>NG :22222 / RTP 20000-20100</code></td>
           <td><span class="badge badge-success">RELAYING (G.711u)</span></td>
         </tr>
         <tr>
-          <td><span class="badge badge-success">Revenue Engine</span></td>
+          <td><span class="badge badge-voice">Revenue Engine</span></td>
           <td><strong>Erlang/OTP Telecom Charging</strong></td>
           <td><code>Cowboy REST :8085</code></td>
           <td><span class="badge badge-success">RUNNING (OTP 25)</span></td>
@@ -299,11 +344,11 @@ const app = {
         recentCallsEl.innerHTML = data.recent_calls.map(c => `
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid var(--border-subtle);">
             <div>
-              <div style="font-weight: 600; font-size: 0.85rem;">${c.caller} ➔ ${c.callee}</div>
+              <div style="font-weight: 600; font-size: 0.85rem;"><span class="text-blue">${c.caller}</span> ➔ <span class="text-red">${c.callee}</span></div>
               <div style="font-size: 0.72rem; color: var(--text-muted);">${c.start_time || 'Recent'} • Duration: ${c.duration || 1}s • SIP 200 OK</div>
             </div>
             <div>
-              <span class="badge badge-success">CHARGED</span>
+              <span class="badge badge-voice">CHARGED</span>
             </div>
           </div>
         `).join("");
@@ -329,52 +374,62 @@ const app = {
             </span>
           </div>
 
-          <div class="sub-details-grid">
-            <div class="sub-detail-item">
-              <span class="detail-label">IMSI</span>
-              <span class="detail-val">${sub.imsi}</span>
+          <div class="sub-card-body">
+            <div class="sub-details-grid">
+              <div class="sub-detail-item">
+                <span class="detail-label">IMSI</span>
+                <span class="detail-val">${sub.imsi}</span>
+              </div>
+              <div class="sub-detail-item">
+                <span class="detail-label">MSISDN</span>
+                <span class="detail-val">${sub.msisdn}</span>
+              </div>
+              <div class="sub-detail-item">
+                <span class="detail-label">Home PLMN</span>
+                <span class="detail-val">${sub.hplmn}</span>
+              </div>
+              <div class="sub-detail-item">
+                <span class="detail-label">Serving PLMN</span>
+                <span class="detail-val">${sub.serving_plmn}</span>
+              </div>
+              <div class="sub-detail-item">
+                <span class="detail-label">Rate Plan</span>
+                <span class="detail-val">${sub.rate_plan}</span>
+              </div>
+              <div class="sub-detail-item">
+                <span class="detail-label">Radio Link</span>
+                <span class="detail-val">${sub.gnb}</span>
+              </div>
             </div>
-            <div class="sub-detail-item">
-              <span class="detail-label">MSISDN</span>
-              <span class="detail-val">${sub.msisdn}</span>
-            </div>
-            <div class="sub-detail-item">
-              <span class="detail-label">Home PLMN</span>
-              <span class="detail-val">${sub.hplmn}</span>
-            </div>
-            <div class="sub-detail-item">
-              <span class="detail-label">Serving PLMN</span>
-              <span class="detail-val">${sub.serving_plmn}</span>
-            </div>
-            <div class="sub-detail-item">
-              <span class="detail-label">Rate Plan</span>
-              <span class="detail-val">${sub.rate_plan}</span>
-            </div>
-            <div class="sub-detail-item">
-              <span class="detail-label">Radio Link</span>
-              <span class="detail-val">${sub.gnb}</span>
-            </div>
-          </div>
 
-          <div class="sub-slices-row">
-            <div class="slice-badge">
-              <div class="slice-badge-title">INTERNET SLICE (SST:1)</div>
-              <code>${sub.internet.ip}</code>
+            <div class="sub-slices-row">
+              <div class="slice-badge slice-badge-network">
+                <div class="slice-badge-title">INTERNET SLICE (SST:1)</div>
+                <code>${sub.internet.ip}</code>
+              </div>
+              <div class="slice-badge slice-badge-voice">
+                <div class="slice-badge-title" style="color: var(--brand-red);">IMS SLICE (SST:1)</div>
+                <code>${sub.ims.ip}</code>
+              </div>
             </div>
-            <div class="slice-badge">
-              <div class="slice-badge-title">IMS SLICE (SST:1)</div>
-              <code>${sub.ims.ip}</code>
-            </div>
-          </div>
 
-          <div class="sub-balance-box">
-            <div class="balance-header">
-              <span class="balance-title">Prepaid Balance</span>
-              <span class="balance-amount">${(sub.balance?.available || 0).toFixed(2)} ${sub.balance?.currency || 'LAB'}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem;">
-              <span>Consumed: ${(sub.balance?.consumed || 0).toFixed(2)} LAB</span>
-              <span>Reserved: ${(sub.balance?.reserved || 0).toFixed(2)} LAB</span>
+            <div class="sub-balance-box">
+              <div class="balance-header">
+                <span class="balance-title">Prepaid Balance</span>
+                <span class="balance-amount">${(sub.balance?.available || 0).toFixed(2)} ${sub.balance?.currency || 'LAB'}</span>
+              </div>
+              ${(sub.balance?.available || 0) <= 0.50 ? `
+                <div class="badge-low-balance" style="margin-top: 0.35rem; display: inline-block;">
+                  LOW BALANCE: Recharge required for usage
+                </div>
+              ` : ''}
+              <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem;">
+                <span>Consumed: <strong class="text-red">${(sub.balance?.consumed || 0).toFixed(2)} LAB</strong></span>
+                <span>Reserved: ${(sub.balance?.reserved || 0).toFixed(2)} LAB</span>
+              </div>
+              <button class="btn btn-sm btn-primary" style="width: 100%; margin-top: 0.6rem;" onclick="app.openRechargeModal('${sub.account_id}')">
+                Recharge Balance
+              </button>
             </div>
           </div>
         </div>
@@ -391,7 +446,7 @@ const app = {
             <div style="font-size: 0.72rem; color: var(--text-muted);">${sub.rate_plan} • Serving: ${sub.serving_plmn}</div>
           </div>
           <div style="text-align: right;">
-            <div style="font-weight: 700; font-family: var(--font-mono); color: var(--accent-green-text);">${(sub.balance?.available || 0).toFixed(2)} LAB</div>
+            <div style="font-weight: 700; font-family: var(--font-mono); color: var(--accent-blue-text);">${(sub.balance?.available || 0).toFixed(2)} LAB</div>
             <div style="font-size: 0.7rem; color: var(--text-muted);">Consumed: ${(sub.balance?.consumed || 0).toFixed(2)} LAB</div>
           </div>
         </div>
@@ -418,16 +473,22 @@ const app = {
             ${c.is_roaming ? 'Roaming' : 'Domestic'}
           </span>
         </td>
-        <td><strong>${c.caller}</strong></td>
-        <td><strong>${c.callee}</strong></td>
+        <td><strong class="text-blue">${c.caller}</strong></td>
+        <td><strong class="text-red">${c.callee}</strong></td>
         <td>${c.duration_seconds}s</td>
         <td><span class="badge badge-success">${c.sip_code} ${c.sip_reason}</span></td>
         <td><code>${c.rtp_packets} pkts (0% loss)</code></td>
-        <td><strong>${c.charging?.charged_amount ? c.charging.charged_amount.toFixed(4) + ' LAB' : '0.2500 LAB'}</strong></td>
+        <td><strong class="text-red">${c.charging?.charged_amount ? c.charging.charged_amount.toFixed(4) + ' LAB' : '0.2500 LAB'}</strong></td>
         <td><code>${c.charging?.transaction_id || 'tx-call-xx'}</code></td>
         <td style="font-size: 0.75rem; color: var(--text-muted);">${c.start_time || 'N/A'}</td>
       </tr>
     `).join("");
+
+    const latestCdrEl = document.getElementById("latest-cdr-json");
+    if (latestCdrEl && calls.length > 0) {
+      const latest = calls[0];
+      latestCdrEl.innerHTML = `{\n  <span class="json-key">"cdr_id"</span>: <span class="json-num">${latest.id}</span>,\n  <span class="json-key">"caller"</span>: <span class="json-str">"${latest.caller}"</span>,\n  <span class="json-key">"callee"</span>: <span class="json-str">"${latest.callee}"</span>,\n  <span class="json-key">"service"</span>: <span class="json-str">"VoNR / IMS"</span>,\n  <span class="json-key">"duration_sec"</span>: <span class="json-num">${latest.duration_seconds || 15}</span>,\n  <span class="json-key">"rated_charge"</span>: <span class="json-num">${(latest.charging?.charged_amount || 0.3125).toFixed(4)}</span>,\n  <span class="json-key">"currency"</span>: <span class="json-str">"LAB"</span>,\n  <span class="json-key">"status"</span>: <span class="json-str">"SIP ${latest.sip_code} ${latest.sip_reason} (0% RTP Loss)"</span>\n}`;
+    }
   },
 
   renderTariffs(tariffs) {
@@ -443,7 +504,7 @@ const app = {
         <td><strong>${t.service_type.toUpperCase()}</strong></td>
         <td>${t.destination_type}</td>
         <td>${t.setup_charge.toFixed(2)} LAB</td>
-        <td><strong>${t.unit_rate.toFixed(4)} LAB</strong> / ${t.service_type === 'data' ? 'MB' : 'sec'}</td>
+        <td><strong class="text-blue">${t.unit_rate.toFixed(4)} LAB</strong> / ${t.service_type === 'data' ? 'MB' : 'sec'}</td>
       </tr>
     `).join("");
   },
@@ -461,8 +522,8 @@ const app = {
 
     tbody.innerHTML = transactions.map(tx => {
       const isTopup = tx.transaction_type === "TOPUP";
-      const badgeClass = isTopup ? "badge-success" : "badge-neutral";
-      const amtColor = isTopup ? "text-green" : "";
+      const badgeClass = isTopup ? "badge-network" : "badge-voice";
+      const amtColor = isTopup ? "text-blue" : "text-red";
       const amtSign = isTopup ? "+" : "";
 
       return `
@@ -493,79 +554,241 @@ const app = {
     const recEquation = document.getElementById("rec-equation");
 
     if (auditHeadline) auditHeadline.textContent = `Financial Reconciliation: ${rec.status}`;
-    if (recAccounts) recAccounts.textContent = rec.audited_accounts || 4;
-    if (recAnomalies) recAnomalies.textContent = rec.anomalies_count || 0;
-    if (recTopups) recTopups.textContent = `${(rec.total_topups || 105.02).toFixed(2)} LAB`;
+    if (recAccounts) recAccounts.textContent = rec.accounts_audited ?? rec.audited_accounts ?? 4;
+    if (recAnomalies) recAnomalies.textContent = rec.anomalies_count !== undefined ? rec.anomalies_count : 0;
+    if (recTopups) recTopups.textContent = `${(rec.total_topups !== undefined ? rec.total_topups : 105.02).toFixed(2)} LAB`;
 
-    const totalCalculated = (rec.total_available || 0) + (rec.total_consumed || 0);
-    if (recEquation) recEquation.textContent = `${totalCalculated.toFixed(2)} LAB (Avail: ${rec.total_available?.toFixed(2)} + Consumed: ${rec.total_consumed?.toFixed(2)})`;
+    const avail = rec.total_available !== undefined ? rec.total_available : 0;
+    const consumed = rec.total_consumed !== undefined ? rec.total_consumed : 0;
+    const reserved = rec.total_reserved !== undefined ? rec.total_reserved : 0;
+    const totalCalculated = avail + consumed + reserved;
+    
+    if (recEquation) {
+      if (reserved > 0) {
+        recEquation.textContent = `${totalCalculated.toFixed(2)} LAB (Avail: ${avail.toFixed(2)} + Cons: ${consumed.toFixed(2)} + Res: ${reserved.toFixed(2)})`;
+      } else {
+        recEquation.textContent = `${totalCalculated.toFixed(2)} LAB (Avail: ${avail.toFixed(2)} + Consumed: ${consumed.toFixed(2)})`;
+      }
+    }
   },
 
   // ------------------------------------------------------------------------
-  // Action Handlers
+  // Interactive Voice Call Control Methods
   // ------------------------------------------------------------------------
+  callPollInterval: null,
+  callStartTime: null,
 
-  async triggerCall(scenario) {
+  swapCallUEs() {
+    const callerSel = document.getElementById("call-select-caller");
+    const calleeSel = document.getElementById("call-select-callee");
+    if (!callerSel || !calleeSel) return;
+    const tmp = callerSel.value;
+    callerSel.value = calleeSel.value;
+    calleeSel.value = tmp;
+  },
+
+  onDurationModeChange() {
+    const durSel = document.getElementById("call-select-duration");
+    const customWrap = document.getElementById("custom-duration-wrapper");
+    if (!durSel || !customWrap) return;
+    if (durSel.value === "custom") {
+      customWrap.style.display = "block";
+    } else {
+      customWrap.style.display = "none";
+    }
+  },
+
+  triggerSpecificCall(caller, callee) {
+    const callerSel = document.getElementById("call-select-caller");
+    const calleeSel = document.getElementById("call-select-callee");
+    if (callerSel) callerSel.value = caller;
+    if (calleeSel) calleeSel.value = callee;
+    this.startCustomCall();
+  },
+
+  async startCustomCall() {
+    const callerSel = document.getElementById("call-select-caller");
+    const calleeSel = document.getElementById("call-select-callee");
+    const durSel = document.getElementById("call-select-duration");
+    const customInput = document.getElementById("call-custom-seconds");
+
+    const caller = callerSel ? callerSel.value : "1";
+    const callee = calleeSel ? calleeSel.value : "2";
+
+    if (caller === callee) {
+      this.showToast("Caller and Callee must be different UEs!", "error");
+      return;
+    }
+
+    let duration = "manual";
+    if (durSel) {
+      if (durSel.value === "custom") {
+        duration = customInput ? (parseFloat(customInput.value) || 15) : 15;
+      } else if (durSel.value !== "manual") {
+        duration = parseFloat(durSel.value);
+      }
+    }
+
+    const startBtn = document.getElementById("btn-start-call");
+    const hangupBtn = document.getElementById("btn-hangup-call");
+    const activeHud = document.getElementById("active-call-hud");
+    const partiesText = document.getElementById("hud-parties-text");
+    const hudStatus = document.getElementById("hud-status-text");
+
     const runnerCard = document.getElementById("call-runner-card");
     const runnerTitle = document.getElementById("runner-title");
     const runnerStatus = document.getElementById("runner-status-badge");
     const runnerLog = document.getElementById("runner-terminal-log");
     const runnerStats = document.getElementById("runner-stats-row");
 
+    if (startBtn) startBtn.style.display = "none";
+    if (hangupBtn) hangupBtn.style.display = "inline-flex";
+    if (activeHud) activeHud.style.display = "block";
+    if (partiesText) partiesText.textContent = `UE${caller} ──► UE${callee}`;
+    if (hudStatus) hudStatus.textContent = "CALL IN PROGRESS";
+
     if (runnerCard) runnerCard.style.display = "block";
-    if (runnerTitle) runnerTitle.textContent = `Live IMS Voice Call Execution (${scenario.toUpperCase()})`;
+    if (runnerTitle) runnerTitle.textContent = `Live IMS Voice Call: UE${caller} ──► UE${callee}`;
     if (runnerStatus) {
       runnerStatus.className = "badge badge-warning";
       runnerStatus.textContent = "Signaling & Media in progress...";
     }
-    if (runnerLog) runnerLog.textContent = `[${new Date().toISOString()}] Initiating SIP Digest MD5 Registration...\nSending SIP INVITE from User Equipment namespace...`;
+    if (runnerLog) runnerLog.textContent = `[${new Date().toISOString()}] Initiating SIP Digest MD5 Registration...\nCalling UE${caller} -> UE${callee} (Duration Mode: ${duration})...`;
     if (runnerStats) runnerStats.innerHTML = "";
 
-    this.showToast(`Starting ${scenario} call simulation...`, "info");
+    this.callStartTime = Date.now();
+    this.startCallHudPolling();
 
     try {
-      const res = await fetch("/api/actions/trigger-call", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenario })
-      });
-
-      const data = await res.json();
-
-      if (runnerLog) runnerLog.textContent = data.raw_output || JSON.stringify(data, null, 2);
-
-      if (data.success) {
-        if (runnerStatus) {
-          runnerStatus.className = "badge badge-success";
-          runnerStatus.textContent = `COMPLETED in ${data.elapsed_seconds}s (0% Loss)`;
+      if (duration === "manual") {
+        const res = await fetch("/api/actions/start-call", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ caller, callee, duration: "manual" })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.message || "Failed to start manual call");
         }
-        if (runnerStats) {
-          runnerStats.innerHTML = `
-            <div><strong>Scenario:</strong> ${data.scenario}</div>
-            <div><strong>Rated Charge:</strong> <span class="text-green">${data.rated_charge.toFixed(4)} LAB</span> (${data.tariff_id})</div>
-            <div><strong>Transaction ID:</strong> <code>${data.transaction_id}</code></div>
-            <div><strong>New Available Balance:</strong> <span class="text-green">${data.new_available_balance !== null ? data.new_available_balance.toFixed(4) + ' LAB' : 'Updated'}</span></div>
-          `;
-        }
-        this.showToast(`Call completed successfully. Charged ${data.rated_charge} LAB (${data.transaction_id})`, "success");
+        this.showToast(`Active call connected (UE${caller} -> UE${callee}). Click Hang Up when ready.`, "info");
       } else {
-        if (runnerStatus) {
-          runnerStatus.className = "badge badge-danger";
-          runnerStatus.textContent = "Call Failed or Timeout";
-        }
-        this.showToast(`Call execution error: ${data.message || 'Check terminal log'}`, "error");
+        this.showToast(`Starting ${duration}s call (UE${caller} -> UE${callee})...`, "info");
+        const res = await fetch("/api/actions/trigger-call", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ caller, callee, duration })
+        });
+        const data = await res.json();
+        this.onCallFinished(data);
       }
-
-      // Instant refresh of state
-      setTimeout(() => this.refreshAll(true), 1000);
-
     } catch (err) {
+      this.onCallFinished({ success: false, message: err.message });
+    }
+  },
+
+  async hangupActiveCall() {
+    this.showToast("Ending call and rating charges...", "info");
+    const hudStatus = document.getElementById("hud-status-text");
+    if (hudStatus) hudStatus.textContent = "TERMINATING VIA SIP BYE...";
+
+    try {
+      const res = await fetch("/api/actions/hangup-call", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      const data = await res.json();
+      this.onCallFinished(data);
+    } catch (err) {
+      this.onCallFinished({ success: false, message: err.message });
+    }
+  },
+
+  startCallHudPolling() {
+    if (this.callPollInterval) clearInterval(this.callPollInterval);
+    const timerDisplay = document.getElementById("hud-timer-display");
+    const pktsDisplay = document.getElementById("hud-packets-display");
+
+    this.callPollInterval = setInterval(async () => {
+      const elapsedSec = Math.floor((Date.now() - this.callStartTime) / 1000);
+      const hrs = String(Math.floor(elapsedSec / 3600)).padStart(2, '0');
+      const mins = String(Math.floor((elapsedSec % 3600) / 60)).padStart(2, '0');
+      const secs = String(elapsedSec % 60).padStart(2, '0');
+      if (timerDisplay) timerDisplay.textContent = `${hrs}:${mins}:${secs}`;
+
+      const estPkts = elapsedSec * 50;
+      if (pktsDisplay) pktsDisplay.textContent = `~${estPkts} pkts sent (0% loss)`;
+
+      try {
+        const res = await fetch("/api/actions/call-status");
+        if (res.ok) {
+          const st = await res.json();
+          if (st && st.active && st.packets_sent) {
+            if (pktsDisplay) pktsDisplay.textContent = `${st.packets_sent} pkts sent (0% loss)`;
+          }
+        }
+      } catch (e) {}
+    }, 1000);
+  },
+
+  stopCallHudPolling() {
+    if (this.callPollInterval) {
+      clearInterval(this.callPollInterval);
+      this.callPollInterval = null;
+    }
+  },
+
+  onCallFinished(data) {
+    this.stopCallHudPolling();
+
+    const startBtn = document.getElementById("btn-start-call");
+    const hangupBtn = document.getElementById("btn-hangup-call");
+    const activeHud = document.getElementById("active-call-hud");
+
+    if (startBtn) startBtn.style.display = "inline-flex";
+    if (hangupBtn) hangupBtn.style.display = "none";
+    if (activeHud) activeHud.style.display = "none";
+
+    const runnerStatus = document.getElementById("runner-status-badge");
+    const runnerLog = document.getElementById("runner-terminal-log");
+    const runnerStats = document.getElementById("runner-stats-row");
+
+    if (runnerLog) runnerLog.textContent = data.raw_output || data.message || JSON.stringify(data, null, 2);
+
+    if (data.success) {
+      if (runnerStatus) {
+        runnerStatus.className = "badge badge-success";
+        runnerStatus.textContent = `COMPLETED (${data.elapsed_seconds}s, 0% Loss)`;
+      }
+      if (runnerStats) {
+        runnerStats.innerHTML = `
+          <div><strong>Call Scenario:</strong> ${data.scenario || 'VoNR Voice Call'}</div>
+          <div><strong>Call Duration:</strong> <code>${data.elapsed_seconds}s</code></div>
+          <div><strong>Rated Charge:</strong> <span class="text-blue">${(data.rated_charge || 0).toFixed(4)} LAB</span> (${data.tariff_id || 'Rated'})</div>
+          <div><strong>Transaction ID:</strong> <code>${data.transaction_id || 'N/A'}</code></div>
+          <div><strong>Available Balance:</strong> <span class="text-blue">${data.new_available_balance !== null && data.new_available_balance !== undefined ? data.new_available_balance.toFixed(4) + ' LAB' : 'Updated'}</span></div>
+        `;
+      }
+      this.showToast(`Call ended cleanly. Rated ${(data.rated_charge || 0).toFixed(4)} LAB (${data.transaction_id || ''})`, "success");
+    } else {
       if (runnerStatus) {
         runnerStatus.className = "badge badge-danger";
-        runnerStatus.textContent = "Execution Error";
+        runnerStatus.textContent = "Call Failed or Interrupted";
       }
-      if (runnerLog) runnerLog.textContent = `Error: ${err.message}`;
-      this.showToast(`Failed to trigger call: ${err.message}`, "error");
+      this.showToast(`Call failed: ${data.message || 'Check terminal log'}`, "error");
+    }
+
+    setTimeout(() => this.refreshAll(true), 1000);
+  },
+
+  async triggerCall(scenario) {
+    if (scenario === "domestic") {
+      this.triggerSpecificCall("1", "2");
+    } else if (scenario === "roaming") {
+      this.triggerSpecificCall("1", "3");
+    } else if (scenario === "reverse-roaming") {
+      this.triggerSpecificCall("3", "1");
+    } else {
+      this.triggerSpecificCall("1", "2");
     }
   },
 
@@ -574,34 +797,68 @@ const app = {
     if (runnerCard) runnerCard.style.display = "none";
   },
 
+  openRechargeModal(accountId = null) {
+    const accSelect = document.getElementById("topup-account-select");
+    if (accSelect && accountId) {
+      accSelect.value = accountId;
+    }
+    this.updateRechargePreview();
+    this.openModal("modal-topup");
+  },
+
+  updateRechargePreview() {
+    const accSelect = document.getElementById("topup-account-select");
+    const amtInput = document.getElementById("topup-amount");
+    const curBalEl = document.getElementById("topup-current-bal");
+    const previewAmtEl = document.getElementById("topup-preview-amt");
+    const newBalEl = document.getElementById("topup-new-bal");
+
+    if (!accSelect || !amtInput) return;
+    const accountId = accSelect.value;
+    const sub = this.data.subscribers.find(s => s.account_id === accountId);
+    const currentBal = sub?.balance?.available || 0.0;
+    const rechargeAmt = parseFloat(amtInput.value) || 0.0;
+    const newBal = currentBal + (rechargeAmt > 0 ? rechargeAmt : 0.0);
+
+    if (curBalEl) curBalEl.textContent = `${currentBal.toFixed(2)} LAB`;
+    if (previewAmtEl) previewAmtEl.textContent = `+${(rechargeAmt > 0 ? rechargeAmt : 0).toFixed(2)} LAB`;
+    if (newBalEl) newBalEl.textContent = `${newBal.toFixed(2)} LAB`;
+  },
+
   async submitTopup() {
     const accSelect = document.getElementById("topup-account-select");
     const amtInput = document.getElementById("topup-amount");
     const descInput = document.getElementById("topup-desc");
+    const refInput = document.getElementById("topup-ref");
 
-    const account_id = accSelect.value;
-    const amount = parseFloat(amtInput.value);
-    const description = descInput.value;
+    const account_id = accSelect ? accSelect.value : "";
+    const amount = parseFloat(amtInput ? amtInput.value : "0");
+    const description = descInput ? descInput.value.trim() || "Operator Balance Credit" : "Operator Balance Credit";
+    const reference_id = refInput ? refInput.value.trim() : "";
 
     if (!account_id || isNaN(amount) || amount <= 0) {
-      this.showToast("Please provide a valid top-up amount", "error");
+      this.showToast("Please provide a valid positive recharge amount", "error");
       return;
     }
 
+    const payload = { account_id, amount, description };
+    if (reference_id) payload.reference_id = reference_id;
+
     try {
-      const res = await fetch("/api/actions/topup", {
+      const res = await fetch("/api/actions/recharge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account_id, amount, description })
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
       if (res.ok) {
-        this.showToast(`Top-up of +${amount.toFixed(2)} LAB applied to ${account_id}`, "success");
+        this.showToast(`Recharge of +${amount.toFixed(2)} LAB applied to ${account_id}`, "success");
         this.closeModal("modal-topup");
-        this.refreshAll(true);
+        if (refInput) refInput.value = "";
+        await this.refreshAll(true);
       } else {
-        this.showToast(`Top-up failed: ${data.message || data.error}`, "error");
+        this.showToast(`Recharge failed: ${data.message || data.error}`, "error");
       }
     } catch (e) {
       this.showToast(`Network error: ${e.message}`, "error");

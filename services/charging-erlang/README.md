@@ -72,7 +72,8 @@ Base URL: `http://127.0.0.1:8085`
 | `GET` | `/v1/accounts` | List all provisioned subscriber accounts | `200` |
 | `GET` | `/v1/accounts/:id/balance` | Query multi-bucket balance statement | `200`, `404` |
 | `GET` | `/v1/accounts/:id/transactions` | Query full sequential transaction journal | `200`, `404` |
-| `POST` | `/v1/accounts/:id/topup` | Add credit to subscriber account | `200`, `400`, `404` |
+| `POST` | `/v1/accounts/:id/recharge` | Add credit to subscriber account with idempotency key support | `200`, `400`, `404` |
+| `POST` | `/v1/accounts/:id/topup` | Alias for account balance credit | `200`, `400`, `404` |
 | `GET` | `/v1/tariffs` | List all active tariff rules | `200` |
 | `POST` | `/v1/rating/quote` | Rate quote for voice duration or data units | `200`, `400`, `404` |
 | `POST` | `/v1/charging/events` | Direct rating & debit for completed call event | `200`, `400`, `402`, `404` |
