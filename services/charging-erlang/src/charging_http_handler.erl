@@ -205,20 +205,27 @@ handle_request(<<"POST">>, <<"/v1/charging/call">>, Req0) ->
 
 %%--------------------------------------------------------------------
 %% POST /v1/accounts/:account_id/topup
+%% POST /v1/accounts/:account_id/recharge
 %%--------------------------------------------------------------------
 handle_request(<<"POST">>, <<"/v1/accounts/", Rest/binary>>, Req0) ->
-    case binary:split(Rest, <<"/">>, [global]) of
-        [AccountId, <<"topup">>] ->
+    Parts = [P || P <- binary:split(Rest, <<"/">>, [global]), P =/= <<>>],
+    case Parts of
+        [AccountId, Action] when Action =:= <<"topup">> orelse Action =:= <<"recharge">> ->
             with_json_body(Req0, fun(Body, Req) ->
                 Amount = maps:get(<<"amount">>, Body, undefined),
                 Description = maps:get(<<"description">>, Body, <<"Manual Account Topup">>),
+                ReferenceId = maps:get(<<"reference_id">>, Body, 
+                              maps:get(<<"idempotency_key">>, Body, 
+                              maps:get(<<"ref_id">>, Body, undefined))),
                 case Amount of
                     undefined ->
                         reply_error(400, <<"Missing required field: amount">>, Req);
                     _ ->
-                        case charging_server:topup(AccountId, Amount, Description) of
+                        case charging_server:topup(AccountId, Amount, Description, ReferenceId) of
                             {ok, Account} ->
                                 reply_json(200, Account, Req);
+                            {error, invalid_topup_amount} ->
+                                reply_error(400, <<"Invalid topup amount: must be positive number">>, Req);
                             {error, account_not_found} ->
                                 reply_error(404, <<"Account not found">>, Req);
                             {error, Reason} ->

@@ -13,6 +13,7 @@ const visualizer = {
       title: "5G UE Simulation",
       subtitle: "UERANSIM (UE1/2/3)",
       tag: "Dual PDU / NetNS",
+      category: "network",
       desc: "3GPP TS 38.413 / TS 24.501. Isolated network namespaces with Internet (10.45.0.0/16) and IMS (10.46.0.0/16) bearer tunnels."
     },
     {
@@ -21,6 +22,7 @@ const visualizer = {
       title: "5G Standalone Core",
       subtitle: "Open5GS 3GPP Rel-16",
       tag: "12 NFs • N2/N3/N4",
+      category: "network",
       desc: "Isolated Home AMF (:38412) & Visited AMF (:38413), SMF, UPF (GTP-U/PFCP), UDM, UDR, AUSF, PCF, BSF, NRF on Kubernetes."
     },
     {
@@ -29,6 +31,7 @@ const visualizer = {
       title: "Kamailio IMS Core",
       subtitle: "P-CSCF / I-CSCF / S-CSCF",
       tag: "SIP Digest MD5 :5060",
+      category: "voice",
       desc: "RFC 3261 / 3327 SIP proxy & registrar with SQLite subscriber repository and Path-based routing."
     },
     {
@@ -37,6 +40,7 @@ const visualizer = {
       title: "RTPEngine Media",
       subtitle: "Sipwise Media Proxy",
       tag: "G.711 PCMU :22222",
+      category: "voice",
       desc: "Kernel-assisted RTP proxy with dynamic SDP offer/answer rewriting and zero-loss media bridging."
     },
     {
@@ -45,6 +49,7 @@ const visualizer = {
       title: "Erlang/OTP Rating",
       subtitle: "Cowboy REST API :8085",
       tag: "Deterministic Tariffs",
+      category: "voice",
       desc: "Real-time telecom rating engine calculating domestic vs roaming tariffs with setup fees and second/MB granularity."
     },
     {
@@ -53,6 +58,7 @@ const visualizer = {
       title: "Prepaid Ledger",
       subtitle: "Double-Entry Balance Store",
       tag: "ACID Transactions",
+      category: "network",
       desc: "Double-entry transactional ledger tracking available, reserved, and consumed balances with immutable audit trail."
     },
     {
@@ -61,17 +67,18 @@ const visualizer = {
       title: "Reconciliation",
       subtitle: "Financial Audit Engine",
       tag: "Invariant Check: PASS",
+      category: "network",
       desc: "Automated verification ensuring sum of account balances strictly equals total credits minus consumed revenue."
     }
   ],
 
   connectors: [
     { label: "N1/N2/N3" },
-    { label: "N6 IMS Bearer" },
+    { label: "IMS Bearer" },
     { label: "NG Protocol" },
-    { label: "CDR / REST" },
-    { label: "Balance Mutation" },
-    { label: "Audit Verification" }
+    { label: "CDR" },
+    { label: "Balance" },
+    { label: "Verification" }
   ],
 
   init() {
@@ -85,12 +92,16 @@ const visualizer = {
 
     let html = "";
     this.pipelineNodes.forEach((node, idx) => {
+      const isVoice = node.category === "voice";
+      const nodeClass = isVoice ? "node-voice" : "node-network";
+      const icon = isVoice ? "📡" : "🌐";
+
       html += `
-        <div class="pipeline-node ${idx === 0 ? 'node-active' : ''}" id="pnode-${node.id}" onclick="visualizer.showNodeDetail('${node.id}')">
-          <div class="node-code">${node.code}</div>
+        <div class="pipeline-node ${nodeClass} ${idx === 0 ? 'node-active' : ''}" id="pnode-${node.id}" onclick="visualizer.showNodeDetail('${node.id}')">
+          <div class="node-code">${icon} ${node.code}</div>
           <div class="node-title">${node.title}</div>
           <div class="node-subtitle">${node.subtitle}</div>
-          <div class="node-tag badge badge-neutral">${node.tag}</div>
+          <div class="node-tag">${node.tag}</div>
         </div>
       `;
 
@@ -124,9 +135,9 @@ const visualizer = {
 
     container.innerHTML = `
       <!-- Home PLMN (Egypt 602/03 & 602/04) -->
-      <div class="topo-domain-box" style="border-left: 3px solid var(--accent-green);">
+      <div class="topo-domain-box" style="border-top: 3px solid var(--accent-blue);">
         <div class="topo-domain-title">
-          <span>Home Network (HPLMN 602/03 & 602/04)</span>
+          <span>Home Network (HPLMN 602/03 &amp; 602/04)</span>
         </div>
         <div class="topo-items-list">
           <div class="topo-item">
@@ -143,13 +154,13 @@ const visualizer = {
           </div>
           <div class="topo-item">
             <span>Connected UEs</span>
-            <span class="badge badge-success">UE1 (602/03), UE2 (602/04)</span>
+            <span class="badge badge-neutral">UE1 (602/03), UE2 (602/04)</span>
           </div>
         </div>
       </div>
 
       <!-- Visited PLMN (Bosnia 218/90) -->
-      <div class="topo-domain-box" style="border-left: 3px solid var(--border-strong);">
+      <div class="topo-domain-box" style="border-top: 3px solid var(--accent-red);">
         <div class="topo-domain-title">
           <span>Visited Network (VPLMN 218/90 BH Telecom)</span>
         </div>
@@ -174,9 +185,9 @@ const visualizer = {
       </div>
 
       <!-- Shared User Plane & IMS -->
-      <div class="topo-domain-box" style="border-left: 3px solid var(--accent-green);">
+      <div class="topo-domain-box" style="border-top: 3px solid var(--accent-blue);">
         <div class="topo-domain-title">
-          <span>User Plane (UPF) & IMS Service Core</span>
+          <span>User Plane (UPF) &amp; IMS Service Core</span>
         </div>
         <div class="topo-items-list">
           <div class="topo-item">
@@ -199,7 +210,7 @@ const visualizer = {
       </div>
 
       <!-- Revenue & Observability -->
-      <div class="topo-domain-box" style="border-left: 3px solid var(--border-strong);">
+      <div class="topo-domain-box" style="border-top: 3px solid var(--border-strong);">
         <div class="topo-domain-title">
           <span>Revenue Engine & Observability</span>
         </div>

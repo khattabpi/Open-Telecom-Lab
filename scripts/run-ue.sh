@@ -37,6 +37,25 @@ if [ ! -x "${UE_BIN}" ]; then
     fi
 fi
 
+ensure_bridge_ips() {
+    local bridge_dev
+    bridge_dev=$(ip -4 addr show 2>/dev/null | grep -B 2 "172.19.0.1" | awk '/^[0-9]+:/ {print $2}' | tr -d ':' | head -n 1 || echo "")
+    if [ -n "${bridge_dev}" ]; then
+        if ! ip -4 addr show dev "${bridge_dev}" | grep -q "172.19.0.3"; then
+            ip addr add 172.19.0.3/16 dev "${bridge_dev}" 2>/dev/null || true
+        fi
+    fi
+}
+
+ensure_gnb_running() {
+    ensure_bridge_ips
+    if ! pgrep -f 'nr-gnb.*(open5gs-gnb-home|gnb-home)\.yaml' >/dev/null 2>&1 || \
+       ! pgrep -f 'nr-gnb.*(open5gs-gnb-visited|gnb-visited)\.yaml' >/dev/null 2>&1; then
+        echo "[+] Starting gNodeB-Home and gNodeB-Visited..."
+        bash "${SCRIPT_DIR}/run-gnb.sh" all
+    fi
+}
+
 cleanup_namespaces_for_imsi() {
     local imsi="$1"
     for ns in $(ip netns list 2>/dev/null | awk -v imsi="${imsi}" '$1 ~ imsi {print $1}'); do
@@ -85,6 +104,29 @@ stop_ue() {
     esac
 }
 
+wait_for_ue_netns() {
+    local imsi="$1"
+    local timeout_secs="${2:-10}"
+    local netns_internet="ueransim-${imsi}-internet-psi1"
+    local netns_ims="ueransim-${imsi}-ims-psi2"
+    local elapsed=0
+
+    while [ "${elapsed}" -lt "$((timeout_secs * 10))" ]; do
+        if ip netns list 2>/dev/null | grep -qw "${netns_internet}" && \
+           ip netns list 2>/dev/null | grep -qw "${netns_ims}"; then
+            if ip netns exec "${netns_internet}" ip link show uesimtun0 >/dev/null 2>&1 && \
+               ip netns exec "${netns_ims}" ip link show uesimtun0 >/dev/null 2>&1; then
+                return 0
+            fi
+        fi
+        sleep 0.1
+        elapsed=$((elapsed + 1))
+    done
+
+    echo "[-] Warning: Timeout waiting for namespaces (${netns_internet}, ${netns_ims}) after ${timeout_secs}s" >&2
+    return 1
+}
+
 start_single_ue() {
     local name="$1"
     local config="$2"
@@ -97,7 +139,12 @@ start_single_ue() {
     setsid "${UE_BIN}" -c "${config}" >> "${log_file}" 2>&1 < /dev/null &
     local pid=$!
 
-    sleep 3
+    if [ -n "${imsi}" ]; then
+        wait_for_ue_netns "${imsi}" 10 || true
+    else
+        sleep 3
+    fi
+
     if ps -p "${pid}" > /dev/null 2>&1; then
         echo "[✓] ${name} started successfully (PID: ${pid})"
         echo "[+] Log output: ${log_file}"
@@ -140,27 +187,29 @@ fi
 case "${TARGET}" in
     1|ue1)
         stop_ue 1
+        ensure_gnb_running
         start_single_ue "UE1 (602030000000001)" "${UE1_CONFIG}" "/tmp/ueransim-ue1.log" "602030000000001"
         cp -f "/tmp/ueransim-ue1.log" "/tmp/ueransim-ue.log" 2>/dev/null || true
         setup_netns_dns
         ;;
     2|ue2)
         stop_ue 2
+        ensure_gnb_running
         start_single_ue "UE2 (602040000000002)" "${UE2_CONFIG}" "/tmp/ueransim-ue2.log" "602040000000002"
         setup_netns_dns
         ;;
     3|ue3)
         stop_ue 3
+        ensure_gnb_running
         start_single_ue "UE3 (602030000000003 - Roaming 218/90)" "${UE3_CONFIG}" "/tmp/ueransim-ue3.log" "602030000000003"
         setup_netns_dns
         ;;
     all)
         stop_ue all
+        ensure_gnb_running
         start_single_ue "UE1 (602030000000001)" "${UE1_CONFIG}" "/tmp/ueransim-ue1.log" "602030000000001"
         cp -f "/tmp/ueransim-ue1.log" "/tmp/ueransim-ue.log" 2>/dev/null || true
-        sleep 1
         start_single_ue "UE2 (602040000000002)" "${UE2_CONFIG}" "/tmp/ueransim-ue2.log" "602040000000002"
-        sleep 1
         start_single_ue "UE3 (602030000000003 - Roaming 218/90)" "${UE3_CONFIG}" "/tmp/ueransim-ue3.log" "602030000000003"
         setup_netns_dns
         ;;

@@ -23,12 +23,15 @@ spec:
         - name: pcscf
           image: ims-node:latest
           imagePullPolicy: IfNotPresent
-          command:
-            - kamailio
-            - -DD
-            - -E
-            - -f
-            - /etc/kamailio/config/pcscf.cfg
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              echo "[*] Waiting for ogstun 10.46.0.1 interface..."
+              until ip -4 addr show ogstun 2>/dev/null | grep -q "10.46.0.1"; do
+                sleep 1
+              done
+              echo "[✓] ogstun 10.46.0.1 detected. Starting Kamailio P-CSCF..."
+              exec kamailio -DD -E -f /etc/kamailio/config/pcscf.cfg
           ports:
             - name: sip-udp
               containerPort: 5060

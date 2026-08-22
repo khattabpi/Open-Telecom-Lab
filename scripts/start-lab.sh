@@ -48,11 +48,22 @@ stop_native_open5gs() {
 }
 
 # --- 2. Host networking prerequisites --------------------------------------
+ensure_bridge_ips() {
+  local bridge_dev
+  bridge_dev=$(ip -4 addr show 2>/dev/null | grep -B 2 "172.19.0.1" | awk '/^[0-9]+:/ {print $2}' | tr -d ':' | head -n 1 || echo "")
+  if [ -n "${bridge_dev}" ]; then
+    if ! ip -4 addr show dev "${bridge_dev}" | grep -q "172.19.0.3"; then
+      ${SUDO} ip addr add 172.19.0.3/16 dev "${bridge_dev}" 2>/dev/null || true
+    fi
+  fi
+}
+
 setup_host_networking() {
   log "Configuring host kernel networking parameters..."
   ${SUDO} sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
   ${SUDO} sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null 2>&1 || true
   ${SUDO} sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null 2>&1 || true
+  ensure_bridge_ips
 }
 
 # --- 3. Ensure kind node is running and pinned to NODE_IP -------------------

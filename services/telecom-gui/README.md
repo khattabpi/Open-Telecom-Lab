@@ -98,7 +98,20 @@ The GUI server (`server.py`) exposes the following endpoints:
 | `GET` | `/api/network/topology` | Multi-PLMN node, interface, and port mapping |
 | `GET` | `/api/system/health` | Subsystem connectivity check (Erlang, Prometheus, Alertmanager) |
 | `POST` | `/api/actions/trigger-call` | Execute real IMS call and Erlang rating event |
-| `POST` | `/api/actions/topup` | Top up subscriber balance on Erlang server |
+| `POST` | `/api/actions/recharge` | Account balance recharge / top-up with idempotency support |
+| `POST` | `/api/actions/topup` | Alias for account top-up |
 | `POST` | `/api/actions/quote` | Simulate rating quote calculation |
 | `POST` | `/api/actions/reconcile` | Trigger instant financial ledger audit |
 | `POST` | `/api/actions/measure-kpis` | Measure real RFC 3550 jitter, MOS score, and PDD |
+
+---
+
+## 💳 Account Recharge & Balance Management
+
+The platform includes carrier-grade prepaid balance recharge:
+- **Interactive Recharge Modal:** Live dynamic preview of new balance before confirmation (`Current + Amount = New`).
+- **Strict Financial Validation:** Rejects negative, zero, non-numeric, and non-finite amounts on backend with HTTP 400.
+- **Idempotency Guarantees:** Supports client-provided `reference_id` / `idempotency_key` preventing duplicate debits/credits.
+- **Low-Balance Alerts:** Displays clear visual warnings when subscriber liquid funds fall below operational thresholds.
+- **Double-Entry Journal:** Every top-up records an immutable `TOPUP` ledger entry with pre/post balance tracking.
+

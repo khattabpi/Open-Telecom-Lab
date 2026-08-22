@@ -22,6 +22,7 @@
     charge_event/6,
     charge_call/1,
     topup/3,
+    topup/4,
     get_transactions/1,
     get_all_accounts/0,
     get_all_tariffs/0,
@@ -93,7 +94,11 @@ charge_call(CallMap) when is_map(CallMap) ->
 
 -spec topup(binary(), float(), binary()) -> {ok, map()} | {error, term()}.
 topup(AccountId, Amount, Description) ->
-    gen_server:call(?SERVER, {topup, AccountId, Amount, Description}).
+    topup(AccountId, Amount, Description, undefined).
+
+-spec topup(binary(), float(), binary(), binary() | undefined) -> {ok, map()} | {error, term()}.
+topup(AccountId, Amount, Description, ReferenceId) ->
+    gen_server:call(?SERVER, {topup, AccountId, Amount, Description, ReferenceId}).
 
 -spec get_transactions(binary()) -> {ok, [map()]} | {error, term()}.
 get_transactions(AccountId) ->
@@ -169,7 +174,11 @@ handle_call({charge_call, CallMap}, _From, State) ->
     {reply, Reply, inc_op(<<"call_charged">>, NewState)};
 
 handle_call({topup, AccountId, Amount, Description}, _From, State) ->
-    {Reply, NewState} = do_topup(AccountId, Amount, Description, State),
+    {Reply, NewState} = do_topup(AccountId, Amount, Description, undefined, State),
+    {reply, Reply, inc_op(<<"account_topup">>, NewState)};
+
+handle_call({topup, AccountId, Amount, Description, ReferenceId}, _From, State) ->
+    {Reply, NewState} = do_topup(AccountId, Amount, Description, ReferenceId, State),
     {reply, Reply, inc_op(<<"account_topup">>, NewState)};
 
 handle_call({get_transactions, AccountId}, _From, State) ->
@@ -695,47 +704,70 @@ resolve_call_account(Caller, Callee, State) ->
             end
     end.
 
-do_topup(AccountId, Amount, Description, State) ->
-    AmountF = to_float(Amount),
-    case AmountF =< 0.0 of
-        true ->
+do_topup(AccountId, Amount, Description, ReferenceId, State) ->
+    case safe_to_positive_float(Amount) of
+        {error, _} ->
             {{error, invalid_topup_amount}, State};
-        false ->
+        {ok, AmountF} ->
             case resolve_account(AccountId, State) of
                 {error, not_found} ->
                     {{error, account_not_found}, State};
                 {ok, Account} ->
-                    OldAvail = Account#account.balance_available,
-                    NewAvail = round4(OldAvail + AmountF),
+                    %% Idempotency check: if ReferenceId is supplied, check if topup with same ref already processed
+                    HasRef = is_binary(ReferenceId) andalso byte_size(ReferenceId) > 0 andalso ReferenceId =/= <<"init">>,
+                    ExistingTx = case HasRef of
+                        true ->
+                            lists:filter(fun(T) ->
+                                T#transaction.account_id =:= Account#account.id andalso
+                                T#transaction.transaction_type =:= <<"TOPUP">> andalso
+                                T#transaction.reference_id =:= ReferenceId
+                            end, State#state.transactions);
+                        false ->
+                            []
+                    end,
+                    case ExistingTx of
+                        [PrevTx | _] ->
+                            %% Return existing account state without double-crediting
+                            logger:info("[charging_server] Idempotent topup detected for account ~s (ref: ~s, tx: ~s)",
+                                [Account#account.id, ReferenceId, PrevTx#transaction.id]),
+                            {{ok, account_to_map(Account)}, State};
+                        [] ->
+                            OldAvail = Account#account.balance_available,
+                            NewAvail = round4(OldAvail + AmountF),
 
-                    UpdatedAccount = Account#account{
-                        balance_available = NewAvail,
-                        updated_at = current_iso8601()
-                    },
+                            UpdatedAccount = Account#account{
+                                balance_available = NewAvail,
+                                updated_at = current_iso8601()
+                            },
 
-                    TxId = generate_id(<<"tx-topup-">>),
-                    Tx = #transaction{
-                        id = TxId,
-                        account_id = UpdatedAccount#account.id,
-                        transaction_type = <<"TOPUP">>,
-                        amount = AmountF,
-                        balance_before = OldAvail,
-                        balance_after = NewAvail,
-                        reference_type = <<"manual">>,
-                        reference_id = TxId,
-                        description = Description,
-                        created_at = current_iso8601()
-                    },
+                            TxId = generate_id(<<"tx-topup-">>),
+                            StoredRef = case HasRef of
+                                true -> ReferenceId;
+                                false -> TxId
+                            end,
+                            Tx = #transaction{
+                                id = TxId,
+                                account_id = UpdatedAccount#account.id,
+                                transaction_type = <<"TOPUP">>,
+                                amount = AmountF,
+                                balance_before = OldAvail,
+                                balance_after = NewAvail,
+                                reference_type = <<"manual">>,
+                                reference_id = StoredRef,
+                                description = Description,
+                                created_at = current_iso8601()
+                            },
 
-                    NewAccounts = maps:put(UpdatedAccount#account.id, UpdatedAccount, State#state.accounts),
-                    NewTxs = [Tx | State#state.transactions],
+                            NewAccounts = maps:put(UpdatedAccount#account.id, UpdatedAccount, State#state.accounts),
+                            NewTxs = [Tx | State#state.transactions],
 
-                    Result = account_to_map(UpdatedAccount),
-                    NewState = State#state{
-                        accounts = NewAccounts,
-                        transactions = NewTxs
-                    },
-                    {{ok, Result}, NewState}
+                            Result = account_to_map(UpdatedAccount),
+                            NewState = State#state{
+                                accounts = NewAccounts,
+                                transactions = NewTxs
+                            },
+                            {{ok, Result}, NewState}
+                    end
             end
     end.
 
@@ -767,26 +799,44 @@ do_get_metrics(State) ->
         <<"operations_breakdown">> => State#state.operation_counters
     }.
 
-%% Resolves by ID, SIP URI, IMSI, or MSISDN
+%% Resolves by ID, SIP URI, IMSI, MSISDN, or common aliases
 resolve_account(Query, State) when is_binary(Query) ->
     case maps:find(Query, State#state.accounts) of
         {ok, Acc} -> {ok, Acc};
         error ->
             Matches = [A || A <- maps:values(State#state.accounts),
+                            A#account.id =:= Query orelse
                             A#account.sip_uri =:= Query orelse
                             A#account.imsi =:= Query orelse
-                            A#account.msisdn =:= Query],
+                            A#account.msisdn =:= Query orelse
+                            (Query =:= <<"1">> andalso A#account.id =:= <<"acc-ue1">>) orelse
+                            (Query =:= <<"2">> andalso A#account.id =:= <<"acc-ue2">>) orelse
+                            (Query =:= <<"3">> andalso A#account.id =:= <<"acc-ue3">>) orelse
+                            (Query =:= <<"ue1">> andalso A#account.id =:= <<"acc-ue1">>) orelse
+                            (Query =:= <<"ue2">> andalso A#account.id =:= <<"acc-ue2">>) orelse
+                            (Query =:= <<"ue3">> andalso A#account.id =:= <<"acc-ue3">>)
+                      ],
             case Matches of
                 [Single | _] -> {ok, Single};
                 [] -> {error, not_found}
             end
-    end.
+    end;
+resolve_account(Query, State) when is_list(Query) ->
+    resolve_account(list_to_binary(Query), State);
+resolve_account(Query, State) when is_integer(Query) ->
+    resolve_account(integer_to_binary(Query), State);
+resolve_account(_, _) ->
+    {error, not_found}.
 
 inc_op(OpName, #state{operation_counters = Ops} = State) ->
     NewCount = maps:get(OpName, Ops, 0) + 1,
     State#state{operation_counters = maps:put(OpName, NewCount, Ops)}.
 
 account_to_map(#account{} = A) ->
+    ServingPlmn = case A#account.serving_plmn of
+        undefined -> null;
+        S -> S
+    end,
     #{
         <<"account_id">> => A#account.id,
         <<"name">> => A#account.name,
@@ -794,7 +844,7 @@ account_to_map(#account{} = A) ->
         <<"msisdn">> => A#account.msisdn,
         <<"sip_uri">> => A#account.sip_uri,
         <<"plmn">> => A#account.plmn,
-        <<"serving_plmn">> => A#account.serving_plmn,
+        <<"serving_plmn">> => ServingPlmn,
         <<"rate_plan">> => A#account.rate_plan,
         <<"balance_available">> => A#account.balance_available,
         <<"balance_reserved">> => A#account.balance_reserved,
@@ -834,11 +884,49 @@ transaction_to_map(#transaction{} = T) ->
         <<"created_at">> => T#transaction.created_at
     }.
 
-to_float(N) when is_integer(N) -> float(N);
-to_float(N) when is_float(N) -> N;
-to_float(B) when is_binary(B) ->
-    try binary_to_float(B)
-    catch _:_ -> float(binary_to_integer(B))
+safe_to_positive_float(Val) ->
+    case safe_to_float(Val) of
+        {ok, F} when F > 0.0 ->
+            {ok, round4(F)};
+        _ ->
+            {error, invalid_amount}
+    end.
+
+safe_to_float(N) when is_integer(N) -> {ok, float(N)};
+safe_to_float(N) when is_float(N) ->
+    case is_finite(N) of
+        true -> {ok, N};
+        false -> {error, not_finite}
+    end;
+safe_to_float(B) when is_binary(B) ->
+    Trimmed = string:trim(B),
+    case catch binary_to_float(Trimmed) of
+        F when is_float(F) ->
+            case is_finite(F) of
+                true -> {ok, F};
+                false -> {error, not_finite}
+            end;
+        _ ->
+            case catch binary_to_integer(Trimmed) of
+                I when is_integer(I) -> {ok, float(I)};
+                _ -> {error, not_numeric}
+            end
+    end;
+safe_to_float(L) when is_list(L) ->
+    safe_to_float(list_to_binary(L));
+safe_to_float(_) ->
+    {error, invalid_type}.
+
+is_finite(F) ->
+    F =/= infinity andalso F =/= '-infinity' andalso not is_nan(F).
+
+is_nan(F) ->
+    F /= F.
+
+to_float(Val) ->
+    case safe_to_float(Val) of
+        {ok, F} -> F;
+        {error, _} -> 0.0
     end.
 
 round4(Float) ->

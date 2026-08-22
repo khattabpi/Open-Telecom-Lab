@@ -38,6 +38,11 @@ PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://172.19.0.2:30090")
 ALERTMANAGER_URL = os.environ.get("ALERTMANAGER_URL", "http://172.19.0.2:30093")
 GRAFANA_URL = os.environ.get("GRAFANA_URL", "http://172.19.0.2:30300")
 
+# Active Call Tracking
+ACTIVE_CALL_LOCK = threading.Lock()
+ACTIVE_CALL_PROCESS = None
+ACTIVE_CALL_META = {}
+
 UE_CONFIGS = [
     {
         "id": "ue1",
@@ -245,6 +250,8 @@ class TelecomApiHandler(BaseHTTPRequestHandler):
             self.handle_api_network_topology()
         elif url_path == "/api/system/health":
             self.handle_api_system_health()
+        elif url_path == "/api/actions/call-status":
+            self.handle_action_call_status()
         elif url_path.startswith("/api/"):
             self.reply_error("API endpoint not found", status=404)
         else:
@@ -258,7 +265,11 @@ class TelecomApiHandler(BaseHTTPRequestHandler):
 
         if url_path == "/api/actions/trigger-call":
             self.handle_action_trigger_call()
-        elif url_path == "/api/actions/topup":
+        elif url_path == "/api/actions/start-call":
+            self.handle_action_start_call()
+        elif url_path == "/api/actions/hangup-call":
+            self.handle_action_hangup_call()
+        elif url_path in ["/api/actions/topup", "/api/actions/recharge"]:
             self.handle_action_topup()
         elif url_path == "/api/actions/quote":
             self.handle_action_quote()
@@ -630,32 +641,166 @@ class TelecomApiHandler(BaseHTTPRequestHandler):
     # Interactive Actions
     # ----------------------------------------------------------------------
 
-    def handle_action_trigger_call(self):
-        """Trigger a real IMS SIP/RTP voice call and Erlang charging event."""
-        body = self.read_json_body()
-        scenario = body.get("scenario", "domestic")
-        caller = body.get("caller", "1")
-        callee = body.get("callee", "2")
+    def handle_action_call_status(self):
+        """Return current real-time call status and metrics."""
+        status_file = "/tmp/active_call_status.json"
+        st = {"active": False, "state": "IDLE"}
+        if os.path.exists(status_file):
+            try:
+                with open(status_file, "r") as f:
+                    st = json.load(f)
+            except:
+                pass
 
-        if scenario == "domestic":
+        global ACTIVE_CALL_PROCESS
+        with ACTIVE_CALL_LOCK:
+            if ACTIVE_CALL_PROCESS and ACTIVE_CALL_PROCESS.poll() is None:
+                st["active"] = True
+                if st.get("state") in ["IDLE", None]:
+                    st["state"] = "CONNECTED"
+            elif ACTIVE_CALL_PROCESS and ACTIVE_CALL_PROCESS.poll() is not None:
+                if not st.get("active"):
+                    ACTIVE_CALL_PROCESS = None
+
+        self.reply_json(st)
+
+    def handle_action_start_call(self):
+        """Start a live interactive or continuous IMS voice call."""
+        body = self.read_json_body()
+        caller = str(body.get("caller", "1")).replace("ue", "").replace("-", "")
+        callee = str(body.get("callee", "2")).replace("ue", "").replace("-", "")
+        duration = body.get("duration", "manual")
+
+        if caller == callee:
+            self.reply_error("Caller and Callee must be different UEs", status=400)
+            return
+
+        dur_arg = str(duration) if duration else "manual"
+        script_path = os.path.join(REPO_ROOT, "scripts", "test-ims-call.sh")
+        cmd = f"echo '12345' | sudo -S bash {script_path} {caller} {callee} {dur_arg}"
+
+        # Clean old flags
+        if os.path.exists("/tmp/stop_ims_call.flag"):
+            try: os.remove("/tmp/stop_ims_call.flag")
+            except: pass
+
+        global ACTIVE_CALL_PROCESS, ACTIVE_CALL_META
+        with ACTIVE_CALL_LOCK:
+            if ACTIVE_CALL_PROCESS and ACTIVE_CALL_PROCESS.poll() is None:
+                try:
+                    subprocess.run("echo '12345' | sudo -S touch /tmp/stop_ims_call.flag", shell=True)
+                    ACTIVE_CALL_PROCESS.wait(timeout=2.0)
+                except:
+                    pass
+            ACTIVE_CALL_PROCESS = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            ACTIVE_CALL_META = {
+                "caller": f"ue{caller}",
+                "callee": f"ue{callee}",
+                "duration": duration,
+                "start_time": time.time()
+            }
+
+        self.reply_json({
+            "success": True,
+            "message": f"Interactive IMS call initiated (UE{caller} -> UE{callee})",
+            "caller": f"ue{caller}",
+            "callee": f"ue{callee}",
+            "duration_mode": dur_arg
+        })
+
+    def handle_action_hangup_call(self):
+        """End an active continuous IMS voice call cleanly via SIP BYE."""
+        subprocess.run("echo '12345' | sudo -S touch /tmp/stop_ims_call.flag", shell=True)
+
+        global ACTIVE_CALL_PROCESS, ACTIVE_CALL_META
+        stdout = ""
+        with ACTIVE_CALL_LOCK:
+            if ACTIVE_CALL_PROCESS:
+                try:
+                    stdout, _ = ACTIVE_CALL_PROCESS.communicate(timeout=6.0)
+                except subprocess.TimeoutExpired:
+                    subprocess.run("echo '12345' | sudo -S pkill -9 -f run_callee.py || true", shell=True)
+                    subprocess.run("echo '12345' | sudo -S pkill -9 -f run_caller.py || true", shell=True)
+                ACTIVE_CALL_PROCESS = None
+
+        # Clean active status
+        try:
+            with open("/tmp/active_call_status.json", "w") as f:
+                json.dump({"active": False, "state": "IDLE"}, f)
+        except:
+            pass
+
+        charge_m = re.search(r"Rated Charge:\s*([0-9.]+)\s*LAB\s*\(([^)]+)\)", stdout)
+        rated_charge = float(charge_m.group(1)) if charge_m else 0.0
+        tariff_id = charge_m.group(2) if charge_m else "N/A"
+
+        avail_m = re.search(r"Balance Available:\s*([0-9.]+)\s*LAB", stdout)
+        new_available = float(avail_m.group(1)) if avail_m else None
+
+        dur_m = re.search(r"Duration:\s*([0-9.]+)s", stdout)
+        actual_dur = float(dur_m.group(1)) if dur_m else 0.0
+
+        tx_m = re.search(r"Tx:\s*([a-zA-Z0-9_-]+)", stdout)
+        tx_id = tx_m.group(1) if tx_m else "N/A"
+
+        acc_data = http_get_json(f"{ERLANG_CHARGING_URL}/v1/accounts", timeout=2.0)
+
+        self.reply_json({
+            "success": True,
+            "message": "Call terminated by user (SIP BYE successfully exchanged)",
+            "elapsed_seconds": actual_dur,
+            "rated_charge": rated_charge,
+            "tariff_id": tariff_id,
+            "transaction_id": tx_id,
+            "new_available_balance": new_available,
+            "raw_output": stdout,
+            "accounts": acc_data.get("accounts", [])
+        })
+
+    def handle_action_trigger_call(self):
+        """Trigger a real IMS SIP/RTP voice call and Erlang charging event with full pair & duration support."""
+        body = self.read_json_body()
+        scenario = body.get("scenario", "")
+        caller = str(body.get("caller", "")).replace("ue", "").replace("-", "")
+        callee = str(body.get("callee", "")).replace("ue", "").replace("-", "")
+        duration = body.get("duration", None)
+
+        if scenario == "domestic" or (caller == "1" and callee == "2"):
             caller_arg, callee_arg = "1", "2"
             scenario_name = "Domestic Call (UE1 Egypt 602/03 -> UE2 Egypt 602/04)"
-        elif scenario == "roaming":
+        elif scenario == "reverse-domestic" or (caller == "2" and callee == "1"):
+            caller_arg, callee_arg = "2", "1"
+            scenario_name = "Reverse Domestic Call (UE2 Egypt 602/04 -> UE1 Egypt 602/03)"
+        elif scenario == "roaming" or (caller == "1" and callee == "3"):
             caller_arg, callee_arg = "1", "3"
             scenario_name = "Inter-PLMN Roaming Call (UE1 Egypt 602/03 -> UE3 Bosnia 218/90)"
-        elif scenario == "reverse-roaming":
+        elif scenario == "reverse-roaming" or (caller == "3" and callee == "1"):
             caller_arg, callee_arg = "3", "1"
             scenario_name = "Reverse Roaming Call (UE3 Bosnia 218/90 -> UE1 Egypt 602/03)"
-        else:
+        elif scenario in ["cross-plmn-23", "ue2-ue3"] or (caller == "2" and callee == "3"):
+            caller_arg, callee_arg = "2", "3"
+            scenario_name = "Cross-PLMN Roaming Call (UE2 Egypt 602/04 -> UE3 Bosnia 218/90)"
+        elif scenario in ["cross-plmn-32", "ue3-ue2"] or (caller == "3" and callee == "2"):
+            caller_arg, callee_arg = "3", "2"
+            scenario_name = "Cross-PLMN Roaming Call (UE3 Bosnia 218/90 -> UE2 Egypt 602/04)"
+        elif caller and callee and caller != callee:
             caller_arg, callee_arg = str(caller), str(callee)
             scenario_name = f"Custom Call (UE{caller_arg} -> UE{callee_arg})"
+        else:
+            caller_arg, callee_arg = "1", "2"
+            scenario_name = "Domestic Call (UE1 Egypt 602/03 -> UE2 Egypt 602/04)"
 
+        dur_arg = f" {duration}" if (duration is not None and str(duration).strip() != "") else ""
         script_path = os.path.join(REPO_ROOT, "scripts", "test-ims-call.sh")
-        cmd = f"echo '12345' | sudo -S bash {script_path} {caller_arg} {callee_arg}"
+        cmd = f"echo '12345' | sudo -S bash {script_path} {caller_arg} {callee_arg}{dur_arg}"
+
+        # Dynamic timeout based on requested duration
+        req_dur = float(duration) if (duration and str(duration).replace('.','',1).isdigit()) else 1.0
+        timeout_limit = max(req_dur + 20.0, 30.0)
 
         start_time = time.time()
         try:
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=25.0)
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout_limit)
             elapsed = round(time.time() - start_time, 2)
             stdout = res.stdout
             success = (res.returncode == 0) and ("PASSED" in stdout or "ALL IMS REGISTRATIONS" in stdout)
@@ -668,6 +813,9 @@ class TelecomApiHandler(BaseHTTPRequestHandler):
             avail_m = re.search(r"Balance Available:\s*([0-9.]+)\s*LAB", stdout)
             new_available = float(avail_m.group(1)) if avail_m else None
 
+            dur_m = re.search(r"Duration:\s*([0-9.]+)s", stdout)
+            actual_dur = float(dur_m.group(1)) if dur_m else elapsed
+
             tx_m = re.search(r"Tx:\s*([a-zA-Z0-9_-]+)", stdout)
             tx_id = tx_m.group(1) if tx_m else "N/A"
 
@@ -677,7 +825,7 @@ class TelecomApiHandler(BaseHTTPRequestHandler):
             self.reply_json({
                 "success": success,
                 "scenario": scenario_name,
-                "elapsed_seconds": elapsed,
+                "elapsed_seconds": actual_dur,
                 "rated_charge": rated_charge,
                 "tariff_id": tariff_id,
                 "transaction_id": tx_id,
@@ -686,32 +834,46 @@ class TelecomApiHandler(BaseHTTPRequestHandler):
                 "accounts": acc_data.get("accounts", [])
             })
         except subprocess.TimeoutExpired:
-            self.reply_error("Call test execution timed out after 25s", status=504)
+            self.reply_error(f"Call execution timed out after {timeout_limit}s", status=504)
         except Exception as e:
             self.reply_error(f"Execution error: {str(e)}", status=500)
 
     def handle_action_topup(self):
-        """Top up account balance on Erlang charging engine."""
+        """Top up / Recharge account balance on Erlang charging engine with idempotency support."""
         body = self.read_json_body()
         account_id = body.get("account_id")
         amount = body.get("amount")
-        desc = body.get("description", "GUI Operator Credit Topup")
+        desc = body.get("description", "Operator Balance Credit")
+        ref_id = body.get("reference_id") or body.get("idempotency_key") or body.get("ref_id")
+        currency = body.get("currency")
 
         if not account_id or amount is None:
             self.reply_error("account_id and amount are required", status=400)
             return
 
+        if currency and currency.upper() != "LAB":
+            self.reply_error(f"Unsupported currency '{currency}'. Only 'LAB' currency is supported.", status=400)
+            return
+
         try:
             amt_float = float(amount)
+            import math
+            if math.isnan(amt_float) or math.isinf(amt_float):
+                self.reply_error("Amount must be a finite number", status=400)
+                return
             if amt_float <= 0:
                 self.reply_error("Amount must be greater than 0", status=400)
                 return
-        except ValueError:
+        except (ValueError, TypeError):
             self.reply_error("Invalid amount number", status=400)
             return
 
+        payload = {"amount": amt_float, "description": desc}
+        if ref_id:
+            payload["reference_id"] = str(ref_id)
+
         url = f"{ERLANG_CHARGING_URL}/v1/accounts/{account_id}/topup"
-        data, status = http_post_json(url, {"amount": amt_float, "description": desc})
+        data, status = http_post_json(url, payload)
         self.reply_json(data, status=status)
 
     def handle_action_quote(self):
@@ -720,13 +882,19 @@ class TelecomApiHandler(BaseHTTPRequestHandler):
         account_id = body.get("account_id", "acc-ue1")
         destination = body.get("destination", "domestic")
         service_type = body.get("service_type", "voice")
-        duration = float(body.get("duration", 60.0))
+        
+        try:
+            duration = float(body.get("duration", 60.0))
+            if duration <= 0:
+                duration = 60.0
+        except (ValueError, TypeError):
+            duration = 60.0
 
         url = f"{ERLANG_CHARGING_URL}/v1/rating/quote"
         payload = {
-            "account_id": account_id,
-            "destination": destination,
-            "service_type": service_type,
+            "account_id": str(account_id),
+            "destination": str(destination),
+            "service_type": str(service_type),
             "duration": duration
         }
         data, status = http_post_json(url, payload)

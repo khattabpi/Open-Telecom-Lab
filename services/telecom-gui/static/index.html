@@ -3,56 +3,115 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>5G-IMS-Lab — Telecom Operations & Revenue Control Center</title>
+  <title>MOKALAMATI — Telecom Operations & Revenue Control Center</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
 
   <!-- ================================================================= -->
-  <!-- GREEN SIDEBAR — Navigation, System Status, Quick Actions          -->
+  <!-- TOP HEADER BAR (Original Vibrant Blue with Animated Logo & Toggle)-->
   <!-- ================================================================= -->
-  <aside class="sidebar">
+  <header class="top-header-bar">
+    <div class="header-brand-left">
+      <!-- Sidebar Collapse / Expand Toggle Button -->
+      <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" title="Toggle Navigation Sidebar">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
 
-    <!-- Brand -->
-    <div class="sidebar-brand">
-      <span class="logo-badge">5G SA</span>
-      <h1>Telecom Operations &amp; Revenue Control Center</h1>
-      <div class="brand-sub">
-        <span class="status-dot"></span>
-        <span>Open5GS</span> · <span>Kamailio IMS</span> · <span>Erlang/OTP</span>
+      <!-- Animated MOKALAMATI Logo (Network Pin + Rising Waveform Arrow) -->
+      <div class="brand-logo-container" onclick="app.switchTab('overview')">
+        <svg class="mokalamati-logo-mark" viewBox="0 0 38 38" fill="none">
+          <defs>
+            <linearGradient id="logo-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#38BDF8"/>
+              <stop offset="100%" stop-color="#2563EB"/>
+            </linearGradient>
+            <linearGradient id="logo-red" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#FB7185"/>
+              <stop offset="100%" stop-color="#E11D48"/>
+            </linearGradient>
+          </defs>
+          <!-- Concentric Outer Pin Arc -->
+          <circle cx="19" cy="19" r="16" stroke="url(#logo-blue)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="78 22" class="logo-arc"/>
+          <!-- Ascending Soundwave Bars -->
+          <rect x="11" y="20" width="2.5" height="7" rx="1.25" fill="url(#logo-blue)" class="logo-wave-1"/>
+          <rect x="15" y="15" width="2.5" height="12" rx="1.25" fill="url(#logo-blue)" class="logo-wave-2"/>
+          <rect x="19" y="11" width="2.5" height="16" rx="1.25" fill="url(#logo-red)" class="logo-wave-3"/>
+          <rect x="23" y="14" width="2.5" height="13" rx="1.25" fill="url(#logo-red)" class="logo-wave-4"/>
+          <!-- Ascending Signal Arrow -->
+          <path d="M22 8L29 8L29 15M29 8L20 17" stroke="url(#logo-red)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="logo-arrow"/>
+          <!-- Luminous Signal Beacon Point -->
+          <circle cx="29" cy="8" r="2.2" fill="#FFFFFF" class="logo-beacon"/>
+        </svg>
+        <span class="brand-text-wrapper">
+          <span class="brand-moka">MOKA</span><span class="brand-lamati">LAMATI</span>
+        </span>
+      </div>
+
+      <span class="header-doc-title" style="display:none;">Telecom Operations &amp; Revenue Control Center</span>
+    </div>
+
+    <!-- Center Global Search -->
+    <div class="header-search-center">
+      <div class="header-search-wrapper">
+        <svg class="header-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" placeholder="Search IMSI, MSISDN, Slice, CDR ID..." class="header-search-input" id="global-search-input">
       </div>
     </div>
 
-    <!-- Navigation -->
+    <!-- Right Status Pills -->
+    <div class="header-tools-right">
+      <span class="header-status-pill"><span class="status-dot-green"></span> 5GC: Operational</span>
+      <span class="header-status-pill"><span class="status-dot-green"></span> VoNR: Active</span>
+      <div class="header-user-profile">
+        <span class="header-user-avatar">OP</span>
+        <span>NOC Admin</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================================================================= -->
+  <!-- ANIMATED COLLAPSIBLE SIDEBAR (Original Blue with Red Pill Tab)   -->
+  <!-- ================================================================= -->
+  <aside class="sidebar" id="app-sidebar">
+
+    <!-- Navigation Tabs -->
     <nav class="sidebar-nav">
       <div class="nav-tabs">
-        <button class="nav-tab active" data-tab="overview">
+        <button class="nav-tab active" data-tab="overview" title="Overview Dashboard">
           <img src="icons/activity.svg" class="nav-icon" alt="">
-          Overview
+          <span class="nav-tab-label">Overview</span>
         </button>
-        <button class="nav-tab" data-tab="subscribers">
+        <button class="nav-tab" data-tab="subscribers" title="Subscribers &amp; Slices">
           <img src="icons/users.svg" class="nav-icon" alt="">
-          Subscribers &amp; Slices
+          <span class="nav-tab-label">Subscribers &amp; Slices</span>
         </button>
-        <button class="nav-tab" data-tab="calls">
+        <button class="nav-tab" data-tab="calls" title="IMS Calls &amp; Media">
           <img src="icons/phone.svg" class="nav-icon" alt="">
-          IMS Calls &amp; Media
+          <span class="nav-tab-label">IMS Calls &amp; Media</span>
         </button>
-        <button class="nav-tab" data-tab="charging">
+        <button class="nav-tab" data-tab="charging" title="Revenue &amp; Charging">
           <img src="icons/currency-dollar.svg" class="nav-icon" alt="">
-          Revenue &amp; Charging
+          <span class="nav-tab-label">Revenue &amp; Charging</span>
         </button>
-        <button class="nav-tab" data-tab="topology">
+        <button class="nav-tab" data-tab="topology" title="Network Topology">
           <img src="icons/globe.svg" class="nav-icon" alt="">
-          Network Topology
+          <span class="nav-tab-label">Network Topology</span>
         </button>
       </div>
     </nav>
 
-    <!-- System Status -->
+    <!-- System Status Section -->
     <div class="sidebar-section">
       <div class="sidebar-section-title">System Status</div>
       <div class="sidebar-status-list">
@@ -89,7 +148,7 @@
       </div>
     </div>
 
-    <!-- Quick Actions -->
+    <!-- Quick Voice Trigger Actions -->
     <div class="sidebar-actions">
       <button id="btn-quick-call" class="sidebar-btn-primary">Trigger IMS Call</button>
       <div class="sidebar-refresh-row">
@@ -112,55 +171,114 @@
     <main class="main-container">
 
       <!-- ============================================================= -->
-      <!-- VIEW 1: OVERVIEW                                              -->
+      <!-- VIEW 1: OVERVIEW (Streamlined, Focused on Architecture & Traffic) -->
       <!-- ============================================================= -->
       <section id="view-overview" class="view-panel active">
 
-        <!-- Service Chain Pipeline — Signature Element -->
-        <div class="card visualizer-card">
-          <div class="card-header">
-            <div class="header-left">
-              <h3>End-to-End Service Chain</h3>
-              <p class="subtitle">Data-flow pipeline from UERANSIM to Erlang/OTP ledger reconciliation</p>
+        <!-- End-to-End Service Chain Architecture (Focused Top Hero) -->
+        <div class="hero-service-chain-card">
+          <div class="service-chain-header">
+            <div>
+              <h3>End-to-End Service Chain Architecture</h3>
             </div>
-            <span class="badge badge-neutral">Interactive Visualizer</span>
+            <span class="badge badge-voice">Interactive Visualizer</span>
           </div>
-          <div class="card-body">
-            <div class="pipeline-container" id="telecom-pipeline">
-              <!-- Rendered by visualizer.js -->
-            </div>
+          <div class="pipeline-container" id="telecom-pipeline">
+            <!-- Rendered by visualizer.js -->
           </div>
         </div>
 
-        <!-- KPI Strip -->
-        <div class="kpi-grid">
-          <div class="kpi-card">
-            <span class="kpi-title">5G SA Core Status</span>
-            <div class="kpi-value" id="kpi-5gc-status">12/12 NFs</div>
-            <div class="kpi-subtext" id="kpi-5gc-sub">Home (602/03) &amp; Visited (218/90)</div>
+        <!-- 4-Card Core Metric Strip (Focused KPIs) -->
+        <div class="kpi-4-grid">
+          <!-- Red Card 1: Consumed Revenue -->
+          <div class="kpi-card-metric card-red">
+            <div class="kpi-metric-title">Total Consumed Revenue (VoNR+Data)</div>
+            <div class="kpi-metric-val" id="kpi-revenue-consumed">74,891.12 LAB</div>
+            <div class="kpi-metric-sub" id="kpi-revenue-avail">Avail: 105.02 LAB • 4 Accounts</div>
           </div>
-          <div class="kpi-card">
-            <span class="kpi-title">Registered SIMs</span>
-            <div class="kpi-value" id="kpi-ues-count">3 UEs</div>
-            <div class="kpi-subtext">2 Domestic + 1 Roaming (LBO)</div>
+
+          <!-- Red Card 2: Active VoNR Calls -->
+          <div class="kpi-card-metric card-red">
+            <div class="kpi-metric-title">Active VoNR Calls</div>
+            <div class="kpi-metric-val" id="kpi-active-vonr-calls">219</div>
+            <div class="kpi-metric-sub">Bi-directional G.711u media streams</div>
           </div>
-          <div class="kpi-card">
-            <span class="kpi-title">Total Consumed Revenue</span>
-            <div class="kpi-value text-green" id="kpi-revenue-consumed">0.00 LAB</div>
-            <div class="kpi-subtext" id="kpi-revenue-avail">Avail: 0.00 LAB • 4 Accounts</div>
+
+          <!-- Blue Card 1: 5G SA Core Status -->
+          <div class="kpi-card-metric card-blue">
+            <div class="kpi-metric-title">5G SA Core Status</div>
+            <div class="kpi-metric-val" id="kpi-5gc-status">12/12 NFs Active</div>
+            <div class="kpi-metric-sub" id="kpi-5gc-sub">Home (602/03) &amp; Visited (218/90)</div>
           </div>
-          <div class="kpi-card">
-            <span class="kpi-title">Service Assurance (QoE)</span>
-            <div class="kpi-value" id="kpi-qoe-mos">4.41 MOS</div>
-            <div class="kpi-subtext" id="kpi-qoe-stats">CSSR: 100% • Jitter: &lt; 0.5ms</div>
+
+          <!-- Blue Card 2: Registered SIMs -->
+          <div class="kpi-card-metric card-blue">
+            <div class="kpi-metric-title">Registered SIMs</div>
+            <div class="kpi-metric-val" id="kpi-ues-count">3 Active UEs</div>
+            <div class="kpi-metric-sub">2 Domestic + 1 In-Roaming (LBO)</div>
           </div>
         </div>
 
-        <!-- Network Health + Recent Calls -->
-        <div class="two-col-grid">
+        <!-- Primary Operational Grid: Call Traffic vs Revenue & Network Functions -->
+        <div class="bottom-2col-grid">
+          <!-- Left: Call Traffic vs Revenue (High Focus Dual-Line Chart) -->
           <div class="card">
             <div class="card-header">
-              <h3>Network Functions &amp; Gateways</h3>
+              <h3>VoNR Call Traffic vs Telecom Revenue</h3>
+              <button class="btn btn-sm btn-secondary" onclick="app.switchTab('calls')">View Call Logs</button>
+            </div>
+            <div class="card-body">
+              <div class="chart-container">
+                <div class="chart-legend">
+                  <div class="legend-item">
+                    <span class="legend-dot-red"></span>
+                    <span>VoNR Traffic (Calls/hr)</span>
+                  </div>
+                  <div class="legend-item">
+                    <span class="legend-dot-blue"></span>
+                    <span>Revenue (LAB/hr)</span>
+                  </div>
+                </div>
+                <div class="svg-chart-wrapper" id="overview-chart-wrapper">
+                  <svg class="svg-chart" viewBox="0 0 360 145">
+                    <!-- Grid Lines -->
+                    <line x1="30" y1="15" x2="350" y2="15" stroke="#E2E8F0" stroke-dasharray="3,3"/>
+                    <line x1="30" y1="50" x2="350" y2="50" stroke="#E2E8F0" stroke-dasharray="3,3"/>
+                    <line x1="30" y1="85" x2="350" y2="85" stroke="#E2E8F0" stroke-dasharray="3,3"/>
+                    <line x1="30" y1="120" x2="350" y2="120" stroke="#CBD5E1"/>
+
+                    <!-- Y-Axis Labels -->
+                    <text x="5" y="19" font-size="9" fill="#94A3B8">100</text>
+                    <text x="5" y="54" font-size="9" fill="#94A3B8">50</text>
+                    <text x="5" y="89" font-size="9" fill="#94A3B8">25</text>
+                    <text x="5" y="124" font-size="9" fill="#94A3B8">0</text>
+
+                    <!-- Revenue Line (Blue #1D4ED8) -->
+                    <polyline fill="none" stroke="#1D4ED8" stroke-width="2.5" points="30,110 80,90 130,80 180,45 230,55 280,35 330,22"/>
+
+                    <!-- Call Traffic Line (Red #D32F2F) -->
+                    <polyline fill="none" stroke="#D32F2F" stroke-width="2.5" points="30,100 80,70 130,60 180,30 230,40 280,25 330,15"/>
+
+                    <!-- Points -->
+                    <circle cx="330" cy="22" r="4" fill="#1D4ED8"/>
+                    <circle cx="330" cy="15" r="4" fill="#D32F2F"/>
+
+                    <!-- X-Axis Labels -->
+                    <text x="30" y="138" font-size="9" fill="#94A3B8">00:00</text>
+                    <text x="105" y="138" font-size="9" fill="#94A3B8">06:00</text>
+                    <text x="180" y="138" font-size="9" fill="#94A3B8">12:00</text>
+                    <text x="255" y="138" font-size="9" fill="#94A3B8">18:00</text>
+                    <text x="325" y="138" font-size="9" fill="#94A3B8">Now</text>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Core Network Functions & Slices Table -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Network Functions &amp; Slices</h3>
               <span class="badge badge-success" id="nf-badge">All Healthy</span>
             </div>
             <div class="card-body" style="padding: 0;">
@@ -169,8 +287,8 @@
                   <thead>
                     <tr>
                       <th>Domain</th>
-                      <th>Network Function</th>
-                      <th>Interface / Port</th>
+                      <th>Function</th>
+                      <th>Port / Slice</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -179,17 +297,12 @@
                   </tbody>
                 </table>
               </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <h3>Recent IMS Calls &amp; Billed Events</h3>
-              <button class="btn btn-sm btn-secondary" onclick="app.switchTab('calls')">View All Calls</button>
-            </div>
-            <div class="card-body">
-              <div class="recent-calls-list" id="overview-recent-calls">
-                <!-- Dynamic recent calls -->
+              <div class="table-pagination-footer">
+                <span>Showing 1-6 of 12 Nodes</span>
+                <div class="pagination-btns">
+                  <button class="btn-page active">1</button>
+                  <button class="btn-page">2</button>
+                </div>
               </div>
             </div>
           </div>
@@ -220,36 +333,178 @@
       <!-- VIEW 3: IMS CALLS & MEDIA                                     -->
       <!-- ============================================================= -->
       <section id="view-calls" class="view-panel">
-        <div class="panel-header">
+        <div class="panel-header" style="border-left-color: var(--primary-red);">
           <div>
-            <h2>IMS Signaling, RTP Media &amp; Call Records</h2>
-            <p class="subtitle">SIP Digest MD5 sessions, RTPEngine SDP proxying, G.711 voice media, and rated billing events</p>
+            <h2>IMS Signaling, RTP Media &amp; VoNR Call Control</h2>
+            <p class="subtitle">SIP Digest MD5 sessions, RTPEngine SDP proxying, real-time bi-directional G.711 voice media, user-controlled duration &amp; rated billing events</p>
           </div>
           <div class="header-actions">
-            <button class="btn btn-primary" id="btn-trigger-domestic">Domestic Call (UE1 → UE2)</button>
-            <button class="btn btn-outline-green" id="btn-trigger-roaming">Roaming Call (UE1 → UE3)</button>
+            <button class="btn btn-primary" id="btn-trigger-domestic">Quick Domestic (UE1 → UE2)</button>
+            <button class="btn btn-outline-red" id="btn-trigger-roaming">Quick Roaming (UE1 → UE3)</button>
           </div>
         </div>
 
-        <!-- Live Call Execution Console -->
-        <div class="card call-runner-card" id="call-runner-card" style="display: none;">
+        <!-- Interactive Voice Call Control Center Card -->
+        <div class="card call-control-card">
           <div class="card-header">
             <div class="header-left">
-              <h3 id="runner-title">Live IMS Voice Call Execution</h3>
-              <span id="runner-status-badge" class="badge badge-warning">Signaling in progress...</span>
+              <h3>Interactive Voice Call Control Studio</h3>
+              <span class="badge badge-voice">VoNR Media</span>
             </div>
-            <button class="btn btn-sm btn-secondary" onclick="app.closeRunner()">Close Console</button>
+            
           </div>
           <div class="card-body">
-            <div class="runner-stats-row" id="runner-stats-row">
-              <!-- Dynamic stats on call finish -->
+            <!-- Top: Interactive Call Builder Row -->
+            <div class="call-builder-grid">
+              <!-- Caller Selection -->
+              <div class="form-group">
+                <label for="call-select-caller"><strong>Caller (Originating UE)</strong></label>
+                <select id="call-select-caller" class="form-control">
+                  <option value="1" selected>UE1 — Egypt 602/03 (10.46.0.30)</option>
+                  <option value="2">UE2 — Egypt 602/04 (10.46.0.31)</option>
+                  <option value="3">UE3 — Bosnia 218/90 Roaming (10.46.0.111)</option>
+                </select>
+              </div>
+
+              <!-- Swap Button -->
+              <div class="call-swap-col">
+                <button type="button" class="btn-swap-ue" id="btn-swap-caller-callee" title="Swap Caller &amp; Callee" onclick="app.swapCallParties()">
+                  ⇄
+                </button>
+              </div>
+
+              <!-- Callee Selection -->
+              <div class="form-group">
+                <label for="call-select-callee"><strong>Callee (Terminating UE)</strong></label>
+                <select id="call-select-callee" class="form-control">
+                  <option value="1">UE1 — Egypt 602/03 (10.46.0.30)</option>
+                  <option value="2" selected>UE2 — Egypt 602/04 (10.46.0.31)</option>
+                  <option value="3">UE3 — Bosnia 218/90 Roaming (10.46.0.111)</option>
+                </select>
+              </div>
+
+              <!-- Duration Mode & Seconds -->
+              <div class="form-group">
+                <label for="call-duration-mode"><strong>Duration Mode</strong></label>
+                <select id="call-duration-mode" class="form-control" onchange="app.onDurationModeChange()">
+                  <option value="manual" selected>Manual Hang-Up (Live)</option>
+                  <option value="5">Fixed: 5 Seconds</option>
+                  <option value="15">Fixed: 15 Seconds</option>
+                  <option value="30">Fixed: 30 Seconds</option>
+                  <option value="60">Fixed: 60 Seconds</option>
+                  <option value="custom">Custom Seconds...</option>
+                </select>
+              </div>
+
+              <!-- Custom Duration input -->
+              <div class="form-group" id="custom-duration-wrapper" style="display: none;">
+                <label for="call-custom-seconds"><strong>Seconds</strong></label>
+                <input type="number" id="call-custom-seconds" class="form-control" min="1" max="600" value="15" placeholder="Seconds">
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="call-action-btns">
+                <button class="btn btn-voice btn-call-start" id="btn-start-call" onclick="app.startCustomCall()">
+                  <span class="call-icon">📞</span> Start Call
+                </button>
+                <button class="btn btn-danger btn-call-hangup" id="btn-hangup-call" onclick="app.hangupActiveCall()" style="display: none;">
+                  <span class="call-icon">🔴</span> End Call / Hang Up
+                </button>
+              </div>
             </div>
+
+            <!-- Live Active Call HUD & Visualizer -->
+            <div class="card active-call-hud-card" id="active-call-hud" style="display: none; margin-top: 0.75rem;">
+              <div class="hud-inner">
+                <div class="hud-left">
+                  <div class="hud-pulse-container">
+                    <span class="hud-pulse-dot"></span>
+                    <span class="hud-status-text">CALL IN PROGRESS (G.711u AUDIO STREAM)</span>
+                  </div>
+                  <div class="hud-parties" id="hud-parties-text">UE1 ➔ UE2 (Domestic Voice Call)</div>
+                  <div class="hud-details">
+                    <span>Caller IP: <code id="hud-caller-ip">10.46.0.30</code></span>
+                    <span>Callee IP: <code id="hud-callee-ip">10.46.0.31</code></span>
+                    <span>Codec: <code>PCMU/8000</code></span>
+                  </div>
+                </div>
+
+                <!-- Equalizer Sound Wave Animation -->
+                <div class="hud-soundwave">
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                </div>
+
+                <!-- Call Metrics & Quick Hangup -->
+                <div class="hud-metrics">
+                  <div class="hud-timer" id="hud-timer-display">00:00</div>
+                  <div class="hud-packets" id="hud-packets-display">0 RTP Packets • 0% Loss</div>
+                </div>
+
+                <div>
+                  <button class="btn btn-hud-hangup" onclick="app.hangupActiveCall()">
+                    Hang Up Call
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Matrix Dialing Buttons -->
+            <div class="quick-matrix-section">
+              <div class="quick-matrix-title">Quick 1-Click Dial Matrix (Any-to-Any)</div>
+              <div class="quick-matrix-grid">
+                <button type="button" class="btn-matrix" onclick="app.triggerSpecificCall('1', '2')">
+                  <span class="matrix-dir">UE1 ➔ UE2</span>
+                  <span class="matrix-type">Egypt Domestic</span>
+                </button>
+                <button type="button" class="btn-matrix" onclick="app.triggerSpecificCall('2', '1')">
+                  <span class="matrix-dir">UE2 ➔ UE1</span>
+                  <span class="matrix-type">Egypt Domestic</span>
+                </button>
+                <button type="button" class="btn-matrix" onclick="app.triggerSpecificCall('1', '3')">
+                  <span class="matrix-dir">UE1 ➔ UE3</span>
+                  <span class="matrix-type">Roaming Outbound</span>
+                </button>
+                <button type="button" class="btn-matrix" onclick="app.triggerSpecificCall('3', '1')">
+                  <span class="matrix-dir">UE3 ➔ UE1</span>
+                  <span class="matrix-type">Roaming Inbound</span>
+                </button>
+                <button type="button" class="btn-matrix" onclick="app.triggerSpecificCall('2', '3')">
+                  <span class="matrix-dir">UE2 ➔ UE3</span>
+                  <span class="matrix-type">Roaming Outbound</span>
+                </button>
+                <button type="button" class="btn-matrix" onclick="app.triggerSpecificCall('3', '2')">
+                  <span class="matrix-dir">UE3 ➔ UE2</span>
+                  <span class="matrix-type">Roaming Inbound</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Call Execution Terminal Log -->
+        <div class="card call-runner-card" id="call-runner-panel" style="display: none;">
+          <div class="card-header">
+            <div class="header-left">
+              <h3>Live Call Execution Console &amp; SIP Transcript</h3>
+              <span class="badge badge-neutral" id="runner-status-badge">Idle</span>
+            </div>
+            <button class="btn btn-sm btn-secondary" onclick="app.hideRunnerPanel()">Close</button>
+          </div>
+          <div class="card-body">
+            <div class="runner-stats-row" id="runner-stats-row"></div>
             <pre class="terminal-log" id="runner-terminal-log">Starting SIP INVITE...</pre>
           </div>
         </div>
 
         <!-- CDR Table -->
-        <div class="card">
+        <div class="card card-voice">
           <div class="card-header">
             <h3>Kamailio Call Detail Records (CDRs) &amp; Rated Transactions</h3>
             <span class="badge badge-neutral" id="cdr-count-badge">0 Records</span>
@@ -284,7 +539,7 @@
       <!-- VIEW 4: REVENUE & CHARGING                                    -->
       <!-- ============================================================= -->
       <section id="view-charging" class="view-panel">
-        <div class="panel-header">
+        <div class="panel-header" style="border-left-color: var(--primary-red);">
           <div>
             <h2>Erlang/OTP Telecom Revenue &amp; Rating Engine</h2>
             <p class="subtitle">Double-entry prepaid balance ledger, real-time tariffs, idempotency, and automated financial audits</p>
@@ -300,8 +555,8 @@
           <div class="reconcile-inner">
             <div class="reconcile-status-box">
               <div>
-                <h3 id="audit-headline" style="color: var(--accent-green-text);">Financial Reconciliation: PASS</h3>
-                <p id="audit-subtext" style="font-size: 0.78rem; color: var(--text-secondary);">Double-entry balance invariants validated across all subscriber ledger accounts.</p>
+                <h3 id="audit-headline">Financial Reconciliation: PASS</h3>
+                <p id="audit-subtext" style="font-size: 0.76rem;">Double-entry balance invariants validated across all subscriber ledger accounts.</p>
               </div>
             </div>
             <div class="reconcile-stats">
@@ -311,7 +566,7 @@
               </div>
               <div class="rec-stat">
                 <span class="stat-label">Detected Anomalies</span>
-                <span class="stat-val text-green" id="rec-anomalies">0</span>
+                <span class="stat-val text-blue" id="rec-anomalies">0</span>
               </div>
               <div class="rec-stat">
                 <span class="stat-label">Total Topups</span>
@@ -326,7 +581,7 @@
         </div>
 
         <!-- Tariffs & Accounts -->
-        <div class="two-col-grid">
+        <div class="two-col-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.95rem;">
           <div class="card">
             <div class="card-header">
               <h3>Configured Rating Tariffs</h3>
@@ -353,7 +608,7 @@
             </div>
           </div>
 
-          <div class="card">
+          <div class="card card-voice">
             <div class="card-header">
               <h3>Prepaid Subscriber Balances</h3>
               <span class="badge badge-success">ACID Store</span>
@@ -367,7 +622,7 @@
         </div>
 
         <!-- Transaction Ledger -->
-        <div class="card" style="margin-top: 0.25rem;">
+        <div class="card" style="margin-top: 0.2rem;">
           <div class="card-header">
             <h3>Double-Entry Transaction Ledger Audit Trail</h3>
             <span class="badge badge-neutral" id="tx-count-badge">0 Transactions</span>
@@ -407,102 +662,12 @@
             <p class="subtitle">Architecture map of Home PLMN (Egypt 602/03, 602/04), Visited PLMN (Bosnia 218/90), and Observability Stack</p>
           </div>
           <div class="header-actions">
-            <a href="http://172.19.0.2:30300" target="_blank" class="btn btn-secondary">Open Grafana (:30300)</a>
-            <a href="http://172.19.0.2:30090/targets" target="_blank" class="btn btn-secondary">Prometheus Targets (:30090)</a>
+            <button class="btn btn-secondary" onclick="app.refreshAll(true)">Refresh Map</button>
           </div>
         </div>
 
-        <!-- Topology Diagram -->
-        <div class="card">
-          <div class="card-header">
-            <h3>Infrastructure &amp; Protocol Links</h3>
-            <span class="badge badge-success">3GPP Rel-16 Compliant</span>
-          </div>
-          <div class="card-body">
-            <div class="topology-map" id="topology-map-container">
-              <!-- Dynamic Topology rendered by visualizer.js -->
-            </div>
-          </div>
-        </div>
-
-        <!-- Endpoints Table -->
-        <div class="card" style="margin-top: 0.25rem;">
-          <div class="card-header">
-            <h3>Service Endpoints &amp; Protocol Ports Reference</h3>
-          </div>
-          <div class="card-body" style="padding: 0;">
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Component</th>
-                    <th>Protocol / Role</th>
-                    <th>Endpoint Address</th>
-                    <th>Underlying Network</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><strong>Home AMF</strong></td>
-                    <td>N2 NGAP (SCTP)</td>
-                    <td><code>172.19.0.2:38412</code></td>
-                    <td>Home PLMN 602/03 &amp; 602/04</td>
-                    <td><span class="badge badge-success">LISTENING</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Visited AMF (V-AMF)</strong></td>
-                    <td>N2 NGAP (SCTP)</td>
-                    <td><code>172.19.0.2:38413</code></td>
-                    <td>Visited PLMN 218/90 (BH Telecom)</td>
-                    <td><span class="badge badge-success">LISTENING</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>User Plane Function (UPF)</strong></td>
-                    <td>N3 GTP-U (UDP 2152) / N4 PFCP (UDP 8805)</td>
-                    <td><code>172.19.0.2:2152 / 8805</code></td>
-                    <td>GTP Tunnel Endpoints</td>
-                    <td><span class="badge badge-success">ACTIVE</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Kamailio P-CSCF</strong></td>
-                    <td>SIP Proxy (UDP/TCP)</td>
-                    <td><code>10.46.0.1:5060</code></td>
-                    <td>IMS Bearer (DNN: ims)</td>
-                    <td><span class="badge badge-success">LISTENING</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>RTPEngine Media Proxy</strong></td>
-                    <td>NG Control / RTP Relay</td>
-                    <td><code>10.46.0.1:22222 / 20000-20100</code></td>
-                    <td>User Plane Voice Media</td>
-                    <td><span class="badge badge-success">ACTIVE</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Erlang/OTP Charging Service</strong></td>
-                    <td>Cowboy REST API (HTTP)</td>
-                    <td><code>http://127.0.0.1:8085</code></td>
-                    <td>Revenue Management</td>
-                    <td><span class="badge badge-success">UP (OTP 25)</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Prometheus Telemetry</strong></td>
-                    <td>Metrics Engine (HTTP)</td>
-                    <td><code>http://172.19.0.2:30090</code></td>
-                    <td>Observability Stack</td>
-                    <td><span class="badge badge-success">SCRAPING (5s)</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Alertmanager</strong></td>
-                    <td>Incident Detection (HTTP)</td>
-                    <td><code>http://172.19.0.2:30093</code></td>
-                    <td>26 Alert Rules Active</td>
-                    <td><span class="badge badge-success">HEALTHY</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <div class="topology-map" id="topology-map-container">
+          <!-- Rendered by visualizer.js -->
         </div>
       </section>
 
@@ -513,102 +678,110 @@
   <!-- MODALS                                                            -->
   <!-- ================================================================= -->
 
-  <!-- Top-Up Modal -->
-  <div class="modal-overlay" id="modal-topup" style="display: none;">
+  <!-- Top-Up / Recharge Modal -->
+  <div id="modal-topup" class="modal-overlay" style="display: none;">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Add Credit to Subscriber Account</h3>
-        <button class="modal-close" onclick="app.closeModal('modal-topup')">✕</button>
+        <h3>Prepaid Account Recharge / Top-Up</h3>
+        <button class="modal-close" onclick="app.closeModal('modal-topup')">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label>Target Account:</label>
-          <select id="topup-account-select" class="select-input">
-            <option value="acc-ue1">UE1 Domestic Subscriber (acc-ue1)</option>
-            <option value="acc-ue2">UE2 Domestic Subscriber (acc-ue2)</option>
-            <option value="acc-ue3">UE3 Roaming Subscriber (acc-ue3)</option>
-            <option value="acc-test-broke">Test Zero Balance Subscriber (acc-test-broke)</option>
+          <label for="topup-account-select">Select Subscriber Account</label>
+          <select id="topup-account-select" class="form-control" onchange="app.updateRechargePreview()">
+            <option value="acc-ue1">UE1 — IMSI 602030000000001 (Egypt 602/03)</option>
+            <option value="acc-ue2">UE2 — IMSI 602040000000002 (Egypt 602/04)</option>
+            <option value="acc-ue3">UE3 — IMSI 218900000000003 (Bosnia Roaming 218/90)</option>
           </select>
         </div>
+
         <div class="form-group">
-          <label>Top-Up Amount (LAB Currency):</label>
-          <input type="number" id="topup-amount" class="text-input" value="10.00" step="1.0" min="0.1">
+          <label for="topup-amount">Recharge Amount (LAB Credits)</label>
+          <input type="number" id="topup-amount" class="form-control" min="0.01" step="0.50" value="10.00" oninput="app.updateRechargePreview()">
         </div>
+
+        <!-- Dynamic Live Balance Preview Box -->
+        <div class="recharge-preview-box">
+          <div class="recharge-preview-row">
+            <span>Current Available Balance:</span>
+            <strong id="topup-current-bal">0.00 LAB</strong>
+          </div>
+          <div class="recharge-preview-row">
+            <span>Recharge Credit (+):</span>
+            <strong class="text-blue" id="topup-preview-amt">+10.00 LAB</strong>
+          </div>
+          <div class="recharge-preview-row recharge-preview-total">
+            <span>Projected New Balance:</span>
+            <strong id="topup-new-bal">10.00 LAB</strong>
+          </div>
+        </div>
+
         <div class="form-group">
-          <label>Transaction Description:</label>
-          <input type="text" id="topup-desc" class="text-input" value="Manual Operator Balance Credit">
+          <label for="topup-ref">Transaction Reference / Voucher ID (Optional)</label>
+          <input type="text" id="topup-ref" class="form-control" placeholder="e.g. VOUCH-2026-9812">
+        </div>
+
+        <div class="form-group">
+          <label for="topup-desc">Description / Operator Note</label>
+          <input type="text" id="topup-desc" class="form-control" value="Manual Operator Balance Top-Up">
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="app.closeModal('modal-topup')">Cancel</button>
-        <button class="btn btn-primary" id="btn-submit-topup">Submit Top-Up</button>
+        <button class="btn btn-primary" onclick="app.submitTopup()">Confirm Recharge</button>
       </div>
     </div>
   </div>
 
   <!-- Quote Simulator Modal -->
-  <div class="modal-overlay" id="modal-quote" style="display: none;">
+  <div id="modal-quote" class="modal-overlay" style="display: none;">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Tariff &amp; Rating Quote Simulator</h3>
-        <button class="modal-close" onclick="app.closeModal('modal-quote')">✕</button>
+        <h3>Real-Time Telecom Rating Quote Simulator</h3>
+        <button class="modal-close" onclick="app.closeModal('modal-quote')">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label>Subscriber Account:</label>
-          <select id="quote-account-select" class="select-input">
-            <option value="acc-ue1">UE1 (Domestic - standard-prepaid)</option>
-            <option value="acc-ue3">UE3 (Roaming - premium-roaming)</option>
-            <option value="acc-ue2">UE2 (Domestic - standard-prepaid)</option>
+          <label for="quote-account-select">Select Subscriber Account</label>
+          <select id="quote-account-select" class="form-control">
+            <option value="acc-ue1">UE1 — IMSI 602030000000001 (Egypt 602/03)</option>
+            <option value="acc-ue2">UE2 — IMSI 602040000000002 (Egypt 602/04)</option>
+            <option value="acc-ue3">UE3 — IMSI 218900000000003 (Bosnia Roaming 218/90)</option>
           </select>
-        </div>
-        <div class="form-group">
-          <label>Service Type:</label>
-          <select id="quote-service-select" class="select-input">
-            <option value="voice">Voice Call (Vo5G/IMS)</option>
-            <option value="data">Data Session (PDU Bearer)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Destination:</label>
-          <select id="quote-dest-select" class="select-input">
-            <option value="domestic">Domestic (Egypt 602/03 or 602/04)</option>
-            <option value="roaming_vplmn">Roaming VPLMN (Bosnia 218/90)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Units / Duration (seconds or MB):</label>
-          <input type="number" id="quote-units" class="text-input" value="60" min="1">
         </div>
 
-        <div class="quote-result-box" id="quote-result-box" style="display: none;">
-          <h4 style="font-size: 0.82rem; font-weight: 600; margin-bottom: 0.4rem;">Rated Quote Breakdown</h4>
-          <div class="quote-stat-row">
-            <span class="text-secondary">Tariff Applied:</span>
-            <strong id="qr-tariff">tariff-domestic-voice</strong>
-          </div>
-          <div class="quote-stat-row">
-            <span class="text-secondary">Setup Charge:</span>
-            <strong id="qr-setup">0.0500 LAB</strong>
-          </div>
-          <div class="quote-stat-row">
-            <span class="text-secondary">Usage Charge:</span>
-            <strong id="qr-usage">1.2000 LAB</strong>
-          </div>
-          <div class="quote-stat-row quote-total">
-            <span>Estimated Total Charge:</span>
-            <span id="qr-total">1.2500 LAB</span>
-          </div>
+        <div class="form-group">
+          <label for="quote-service-type">Service Type</label>
+          <select id="quote-service-type" class="form-control">
+            <option value="voice">Voice Call (VoNR/IMS)</option>
+            <option value="data">Data Session (GTP-U/Internet)</option>
+          </select>
         </div>
+
+        <div class="form-group">
+          <label for="quote-dest-type">Destination Type</label>
+          <select id="quote-dest-type" class="form-control">
+            <option value="domestic">Domestic Network (HPLMN)</option>
+            <option value="roaming_vplmn">Visited Network (VPLMN Roaming)</option>
+            <option value="international">International Destination</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="quote-duration">Units (Seconds for Voice / MB for Data)</label>
+          <input type="number" id="quote-duration" class="form-control" value="60" min="1">
+        </div>
+
+        <div id="quote-result-container" style="display: none; margin-top: 0.5rem;"></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="app.closeModal('modal-quote')">Close</button>
-        <button class="btn btn-primary" id="btn-calc-quote">Calculate Quote</button>
+        <button class="btn btn-primary" onclick="app.calculateQuote()">Calculate Quote</button>
       </div>
     </div>
   </div>
 
-  <!-- Toast Notification System -->
+  <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
   <!-- Scripts -->

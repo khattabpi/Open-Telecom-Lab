@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="fav-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#1D4ED8" />
+    </linearGradient>
+    <linearGradient id="fav-red" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FB7185" />
+      <stop offset="100%" stop-color="#E11D48" />
+    </linearGradient>
+    <filter id="fav-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="#38BDF8" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+  
+  <!-- Outer Glow Ring (Globe/Pin Ring) -->
+  <circle cx="32" cy="32" r="28" stroke="url(#fav-blue)" stroke-width="4" stroke-linecap="round" stroke-dasharray="140 30" filter="url(#fav-glow)"/>
+  
+  <!-- Ascending Voice Waveform Bars -->
+  <rect x="18" y="34" width="4" height="12" rx="2" fill="url(#fav-blue)"/>
+  <rect x="25" y="26" width="4" height="20" rx="2" fill="url(#fav-blue)"/>
+  <rect x="32" y="18" width="4" height="28" rx="2" fill="url(#fav-red)"/>
+  <rect x="39" y="24" width="4" height="22" rx="2" fill="url(#fav-red)"/>
+  
+  <!-- Ascending Upward Arrow -->
+  <path d="M38 14L48 14L48 24M48 14L34 28" stroke="url(#fav-red)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Signal Pulse Beacon Point -->
+  <circle cx="48" cy="14" r="3.5" fill="#FFFFFF"/>
+</svg>
