@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/images/banner.png" alt="Makalmaty — Production-Grade 5G Core Network Laboratory" width="100%">
+  <img src="docs/images/Gemini_Generated_Image_tm62untm62untm62.jpeg" alt="MOKALAMATI — 5G Telecom Engineering Platform" width="100%">
 </p>
 
 <h1 align="center">Makalmaty — مكالماتي</h1>
@@ -27,27 +27,7 @@ Makalmaty is an engineering-grade 5G telecom laboratory that integrates a comple
 
 ---
 
-## Table of Contents
 
-- [Architecture](#architecture)
-- [Multi-PLMN & Roaming](#multi-plmn--roaming)
-- [5G SA Core Network](#5g-sa-core-network)
-- [IMS Voice Service Layer](#ims-voice-service-layer)
-- [End-to-End Call & Charging Flow](#end-to-end-call--charging-flow)
-- [Revenue & Charging Engine](#revenue--charging-engine)
-- [Operations Control Center](#operations-control-center)
-- [Observability Stack](#observability-stack)
-- [Service Assurance & KPIs](#service-assurance--kpis)
-- [Validation & Regression Testing](#validation--regression-testing)
-- [Repository Structure](#repository-structure)
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Network Endpoints](#network-endpoints)
-- [Verification Commands](#verification-commands)
-- [Configuration Reference](#configuration-reference)
-- [Documentation](#documentation)
-- [License](#license)
-- [Built With](#built-with)
 
 ---
 
